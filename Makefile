@@ -79,14 +79,16 @@ verify-apk: ## Check the release APK is signed with the real key, not the debug 
 	@APKSIGNER=$$(ls -d $(ANDROID_HOME)/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1); \
 	if [ -z "$$APKSIGNER" ]; then echo "apksigner not found under $(ANDROID_HOME)/build-tools"; exit 1; fi; \
 	if [ ! -f $(APK_RELEASE) ]; then echo "no release APK: run 'make apk-release' first"; exit 1; fi; \
-	OWNER=$$($$APKSIGNER verify --print-certs $(APK_RELEASE) 2>/dev/null | grep -m1 'Signer #1 certificate DN'); \
+	OUT=$$($$APKSIGNER verify --print-certs $(APK_RELEASE) 2>&1); \
+	OWNER=$$(echo "$$OUT" | grep -m1 'certificate DN'); \
 	echo "$$OWNER"; \
 	case "$$OWNER" in \
 	  *"CN=Android Debug"*) echo; echo "✗ DEBUG-SIGNED. Do not publish."; \
 	    echo "  Release signing needs VAKANA_RELEASE_* in ~/.gradle/gradle.properties;"; \
 	    echo "  a stale android/ may predate the no-fallback guard. Rebuild with 'make apk-release'."; exit 1 ;; \
 	  *"CN=Vakana.mg"*) echo; echo "✓ signed with the Vakana.mg release key." ;; \
-	  *) echo; echo "? unrecognised signer. Examine the signer before you publish."; exit 1 ;; \
+	  *) echo; echo "? unrecognised signer. Examine the signer before you publish."; \
+	    echo "  $$APKSIGNER printed:"; echo "$$OUT" | grep -v 'WARNING: META-INF' | head -20; exit 1 ;; \
 	esac
 
 release-check: ## Pre-release gate: expo-doctor, guide anchors, versionCode above the latest tag's.
