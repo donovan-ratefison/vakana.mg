@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "Vakana",
+    "slug": "vakana",
+    "version": "0.89.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f5ead5"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "mg.vakana",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs camera access to add photos to journal entries.",
+        "NSMicrophoneUsageDescription": "This app needs microphone access to record voice notes.",
+        "NSPhotoLibraryUsageDescription": "This app needs photo library access to add photos to journal entries."
+      }
+    },
+    "android": {
+      "versionCode": 121,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f5ead5"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "package": "mg.vakana"
+    },
+    "androidNavigationBar": {
+      "enforceContrast": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "./plugins/withReleaseSigning",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#8b5e3c"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to add them to journal entries.",
+          "cameraPermission": "The app accesses your camera to take photos for journal entries."
+        }
+      ],
+      "expo-sqlite",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/ionicons.ttf",
+            "./assets/fonts/Caveat_400Regular.ttf"
+          ]
+        }
+      ],
+      "expo-audio",
+      "expo-asset"
+    ]
+  }
+}

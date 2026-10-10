@@ -1,0 +1,31 @@
+node_modules/
+.expo/
+dist/
+
+# Prebuild native projects, regenerated on demand via `expo prebuild`
+android/
+ios/
+
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+.env
+.env*
+.DS_Store
+*.log
+
+# Local APK archive: pre-rebuild backups. Never commit binaries.
+apk-archive/
+*.apk
+
+# Local bug notes / scratch reports, not part of the repo (issue #18)
+bugs/
+
+# Local assistant instructions and agent worktrees, kept out of the repo
+CLAUDE.md
+.claude/
