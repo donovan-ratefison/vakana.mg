@@ -1,0 +1,142 @@
+# Builds the signed release APK.
+#
+# Two ways to start it:
+#   1. Push a version tag (git tag v1.0.0 && git push origin v1.0.0).
+#      The workflow builds the APK and publishes a GitHub Release with the
+#      APK and its SHA-256 attached.
+#   2. Run it by hand from the Actions tab ("Run workflow"). The workflow
+#      builds the APK and keeps it as a run artifact. It does not publish
+#      a release. Use this to test the pipeline.
+#
+# Signing uses four repository secrets (Settings → Secrets and variables →
+# Actions). The keystore itself is never in the repository:
+#   VAKANA_RELEASE_KEYSTORE_BASE64   base64 of the .jks / .keystore file
+#   VAKANA_RELEASE_STORE_PASSWORD
+#   VAKANA_RELEASE_KEY_ALIAS
+#   VAKANA_RELEASE_KEY_PASSWORD
+# Gradle reads ORG_GRADLE_PROJECT_<name> environment variables as project
+# properties, which is what plugins/withReleaseSigning.js expects.
+name: Release APK
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: npm ci
+
+      - name: Read the version
+        id: version
+        run: echo "version=$(node -p "require('./app.json').expo.version")" >> "$GITHUB_OUTPUT"
+
+      - name: The tag must match the version in app.json
+        if: github.ref_type == 'tag'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app.json version $VERSION."
+            exit 1
+          fi
+          if [ "$(node -p "require('./package.json').version")" != "$VERSION" ]; then
+            echo "::error::package.json version does not match app.json version $VERSION."
+            exit 1
+          fi
+
+      - name: Lint, tests and guide anchors
+        run: |
+          npm run lint
+          npm test
+          node scripts/check-guide-anchors.mjs
+
+      - name: Decode the keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.VAKANA_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret VAKANA_RELEASE_KEYSTORE_BASE64 is not set."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vakana-release.jks"
+          echo "ORG_GRADLE_PROJECT_VAKANA_RELEASE_STORE_FILE=$RUNNER_TEMP/vakana-release.jks" >> "$GITHUB_ENV"
+
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build the release APK
+        working-directory: android
+        env:
+          ORG_GRADLE_PROJECT_VAKANA_RELEASE_STORE_PASSWORD: ${{ secrets.VAKANA_RELEASE_STORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_VAKANA_RELEASE_KEY_ALIAS: ${{ secrets.VAKANA_RELEASE_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_VAKANA_RELEASE_KEY_PASSWORD: ${{ secrets.VAKANA_RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Check that the APK has the Vakana.mg signature
+        run: make verify-apk
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vakana-release.jks"
+
+      - name: Name the APK and compute its SHA-256
+        id: apk
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/vakana-$VERSION.apk"
+          (cd dist && sha256sum "vakana-$VERSION.apk" | tee "vakana-$VERSION.apk.sha256")
+
+      - name: Keep the APK as a run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vakana-${{ steps.version.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: Publish the GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Release notes: the section of CHANGELOG.md for this version.
+          awk -v v="$VERSION" '
+            /^## \[/ { on = (index($0, "## [" v "]") == 1) ; next }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          {
+            echo
+            echo '```'
+            cat "dist/vakana-$VERSION.apk.sha256"
+            echo '```'
+          } >> notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/vakana-$VERSION.apk" "dist/vakana-$VERSION.apk.sha256" \
+            --title "Vakana.mg $VERSION" \
+            --notes-file notes.md \
+            --verify-tag

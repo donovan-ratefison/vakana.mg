@@ -6,7 +6,7 @@
 
 *Vakana* is the Malagasy word for bead. This app is a small fragment of what the physical **Vakana System**, the Malagasy ancestral practice of beads, is capable of. You write a note, give it a bead, and string the beads into threads. The background is in the essay [*My Ancestors Were Writing Lisp*](https://donovan-ratefison.mg/2026/05/31/My-Ancestors-Were-Writing-Lisp/).
 
-**Android only**, pre-1.0. The APK is at [vakana.mg](https://vakana.mg/#get).
+**Android only**. The APK is on the [releases page](https://github.com/donovan-ratefison/vakana.mg/releases) and at [vakana.mg](https://vakana.mg/#get).
 
 <p align="center">
   <img src="docs/screenshots/lock.png" width="250" alt="Lock screen with the PIN keypad">

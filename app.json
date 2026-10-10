@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vakana",
     "slug": "vakana",
-    "version": "0.89.1",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -22,7 +22,7 @@
       }
     },
     "android": {
-      "versionCode": 121,
+      "versionCode": 122,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#f5ead5"
