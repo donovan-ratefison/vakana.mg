@@ -18,9 +18,9 @@
 
 ## How it works
 
-<p align="center">
-  <img src="docs/screenshots/intro-wide.gif" width="720" alt="Animated introduction: notes get beads, a day threads itself, and beads are strung into threads">
-</p>
+
+https://github.com/user-attachments/assets/b6d82fcf-026f-4adf-99c7-72fe43b7e5c0
+
 
 - An **entry** is text with markdown, photos and voice notes. It saves as you type; there is *no save button*.
 - Each entry can carry one **bead**, composed from eight shapes, eight patterns, a mood that sets its color, and a glyph you type. *You decide what a bead means.* You can save a bead under a name and use it again with one tap.
