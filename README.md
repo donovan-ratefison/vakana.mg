@@ -19,7 +19,7 @@
 ## How it works
 
 <p align="center">
-  <img src="docs/screenshots/intro.gif" width="720" alt="Animated introduction: notes get beads, a day threads itself, and beads are strung into threads">
+  <img src="docs/screenshots/intro-wide.gif" width="720" alt="Animated introduction: notes get beads, a day threads itself, and beads are strung into threads">
 </p>
 
 - An **entry** is text with markdown, photos and voice notes. It saves as you type; there is *no save button*.
