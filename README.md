@@ -18,6 +18,10 @@
 
 ## How it works
 
+<p align="center">
+  <img src="docs/screenshots/intro.gif" width="300" alt="Animated introduction: notes get beads, a day threads itself, and beads are strung into threads">
+</p>
+
 - An **entry** is text with markdown, photos and voice notes. It saves as you type; there is *no save button*.
 - Each entry can carry one **bead**, composed from eight shapes, eight patterns, a mood that sets its color, and a glyph you type. *You decide what a bead means.* You can save a bead under a name and use it again with one tap.
 - A **thread** is a chain of beads: a story, a project, a habit. Days thread themselves, and you can string your own. When a cycle ends, you close the thread, and the chain clasps into a ring.
