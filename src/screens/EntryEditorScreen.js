@@ -43,6 +43,7 @@ import { acknowledgeReminder as acknowledgeReminderById } from '../services/remi
 import { getLatestEntryWithBead } from '../services/beadPresets';
 import { exportEntryAsMarkdown } from '../services/exportEntry';
 import { exportEntryAsHtml } from '../services/exportEntryHtml';
+import { exportEntryOrg } from '../services/orgExport';
 import {
   loadEntryCardData,
   captureAndShareCard,
@@ -110,6 +111,10 @@ const parseSqliteUtc = (s) => {
 const ENTRY_FORMAT_META = {
   md: { label: 'Markdown', hint: 'Plain .md with YAML frontmatter.' },
   html: { label: 'HTML', hint: 'Styled page. Pick a template.' },
+  org: {
+    label: 'Org (Emacs)',
+    hint: 'A .zip file for Emacs. It contains an org-datetree, the bead SVG and the attachments.',
+  },
   card: { label: 'Card (PNG)', hint: 'Shareable image for messengers.' },
 };
 
@@ -1238,6 +1243,25 @@ export default function EntryEditorScreen({ route, navigation }) {
     }
   };
 
+  const handleExportOrg = async () => {
+    setExportSheetVisible(false);
+    if (!(await flushAndEnsureEntry())) return;
+    setExportBusyLabel('Preparing Org…');
+    try {
+      const { missing } = await exportEntryOrg(entryIdRef.current);
+      if (missing && missing.length) {
+        Alert.alert(
+          'Exported',
+          `${missing.length} attachment${missing.length === 1 ? ' was' : 's were'} not available. The export skipped the missing attachments.`
+        );
+      }
+    } catch (e) {
+      Alert.alert('Export failed', e?.message || String(e));
+    } finally {
+      setExportBusyLabel(null);
+    }
+  };
+
   const handleExportCard = async (withNotes) => {
     setExportSheetVisible(false);
     if (!(await flushAndEnsureEntry())) return;
@@ -1271,6 +1295,7 @@ export default function EntryEditorScreen({ route, navigation }) {
   const runEntryExport = () => {
     if (exportFormat === 'md') handleExportMd();
     else if (exportFormat === 'html') handleExportHtml(htmlTemplate);
+    else if (exportFormat === 'org') handleExportOrg();
     else if (exportFormat === 'card') handleExportCard(cardWithNotes);
   };
 
@@ -2267,6 +2292,30 @@ export default function EntryEditorScreen({ route, navigation }) {
                       </Text>
                       <Text style={styles.threadsRowSubtext}>
                         Styled page · 5 templates
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={colors.textFaint}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.threadsRow}
+                    onPress={() => setExportFormat('org')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="code-slash-outline"
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.threadsRowText, { flex: undefined }]}>
+                        Org (Emacs)
+                      </Text>
+                      <Text style={styles.threadsRowSubtext}>
+                        .zip for Emacs · org-datetree
                       </Text>
                     </View>
                     <Ionicons

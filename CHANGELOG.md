@@ -5,6 +5,14 @@ This file records all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Org (Emacs) export of a single entry: a zip that holds an org-datetree
+  body, the bead of the entry as an inline SVG, and the copied photos and
+  voice notes.
+
 ## [1.0.0] - 2026-10-10
 
 First public source release, under the Apache License 2.0. The development

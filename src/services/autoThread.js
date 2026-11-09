@@ -95,7 +95,7 @@ function formatMonthThreadName(monthAnchor) {
   return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function placeholderBeadForDate(dateStr) {
+export function placeholderBeadForDate(dateStr) {
   const d = parseLocalDate(dateStr);
   const wd = d ? WEEKDAY_BEAD[d.getDay()] : { glyph: '', mood: 'slate' };
   return { shape: 'dot', pattern: 'solid', mood: wd.mood, glyph: wd.glyph };

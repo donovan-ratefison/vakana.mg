@@ -1,12 +1,6 @@
-// Org-mode export: exporting a thread as an Org `.zip`.
+// Org-mode export: a thread or a single entry as an Org `.zip`.
 // Build contract: docs/architecture/org-export.md. One-way only; no
 // transport, no sync, no import-back (spec §1 non-goals).
-//
-// This module is being built incrementally. Implemented: the bead SVG
-// renderer (src/beads/svg.js), `markdownToOrg`, the raw-thread DB load
-// (`getThreadExportData`), and the flat/datetree Org emitters
-// (`emitOrgDocument`). Still scaffolded: the asset copier + JSZip
-// assembly + share in `exportThreadOrg` (next commit).
 
 import { Platform } from 'react-native';
 import JSZip from 'jszip';
@@ -14,11 +8,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { getDb } from '../database/db';
+import { placeholderBeadForDate } from './autoThread';
 import {
   SHAPE_GEOMETRY,
   MOODS,
   MOOD_BY_KEY,
   PATTERNS,
+  hasBead,
+  readBead,
 } from '../beads/types';
 import { isPrivate, MASKED_TITLE } from '../utils/privacy';
 import { renderBeadSvg, renderChainSvg } from '../beads/svg';
@@ -300,6 +297,55 @@ function inClause(ids) {
   return ids.map(() => '?').join(',');
 }
 
+// The batched photo/voice/comment/mention fetch shared by the thread and
+// single-entry loads. Empty input returns four empty maps (no queries).
+async function loadEntryExtras(db, entryIds) {
+  const photosByEntry = {};
+  const voiceByEntry = {};
+  const commentsByEntry = {};
+  const mentionsByEntry = {};
+  const maps = { photosByEntry, voiceByEntry, commentsByEntry, mentionsByEntry };
+  if (!entryIds.length) return maps;
+  const ph = inClause(entryIds);
+  const photos = await db.getAllAsync(
+    `SELECT entry_id, uri FROM entry_photos
+      WHERE entry_id IN (${ph}) ORDER BY entry_id ASC, id ASC`,
+    entryIds
+  );
+  for (const r of photos) (photosByEntry[r.entry_id] ||= []).push(r.uri);
+
+  const voice = await db.getAllAsync(
+    `SELECT entry_id, uri, duration FROM entry_voice_notes
+      WHERE entry_id IN (${ph}) ORDER BY entry_id ASC, id ASC`,
+    entryIds
+  );
+  for (const r of voice)
+    (voiceByEntry[r.entry_id] ||= []).push({ uri: r.uri, duration: r.duration });
+
+  const cmts = await db.getAllAsync(
+    `SELECT * FROM comments
+      WHERE parent_kind = 'entry' AND parent_id IN (${ph})
+      ORDER BY parent_id ASC, datetime(created_at) ASC, id ASC`,
+    entryIds
+  );
+  for (const c of cmts) (commentsByEntry[c.parent_id] ||= []).push(c);
+
+  const mentions = await db.getAllAsync(
+    `SELECT l.entry_id AS entry_id, t.id AS m_id, t.name AS m_name
+       FROM entry_thread_links l
+       JOIN threads t ON t.id = l.thread_id
+      WHERE l.entry_id IN (${ph})
+      ORDER BY l.entry_id ASC, l.position ASC, l.id ASC`,
+    entryIds
+  );
+  for (const m of mentions)
+    (mentionsByEntry[m.entry_id] ||= []).push({
+      threadId: m.m_id,
+      name: m.m_name,
+    });
+  return maps;
+}
+
 /**
  * @returns {Promise<{
  *   thread, isAuto:boolean, collections:string[],
@@ -351,49 +397,8 @@ export async function getThreadExportData(threadId) {
     ...new Set(beadRows.filter((r) => r.entry_id != null).map((r) => r.entry_id)),
   ];
 
-  const photosByEntry = {};
-  const voiceByEntry = {};
-  const commentsByEntry = {};
-  const mentionsByEntry = {};
-  if (entryIds.length) {
-    const ph = inClause(entryIds);
-    const photos = await db.getAllAsync(
-      `SELECT entry_id, uri FROM entry_photos
-        WHERE entry_id IN (${ph}) ORDER BY entry_id ASC, id ASC`,
-      entryIds
-    );
-    for (const r of photos) (photosByEntry[r.entry_id] ||= []).push(r.uri);
-
-    const voice = await db.getAllAsync(
-      `SELECT entry_id, uri, duration FROM entry_voice_notes
-        WHERE entry_id IN (${ph}) ORDER BY entry_id ASC, id ASC`,
-      entryIds
-    );
-    for (const r of voice)
-      (voiceByEntry[r.entry_id] ||= []).push({ uri: r.uri, duration: r.duration });
-
-    const cmts = await db.getAllAsync(
-      `SELECT * FROM comments
-        WHERE parent_kind = 'entry' AND parent_id IN (${ph})
-        ORDER BY parent_id ASC, datetime(created_at) ASC, id ASC`,
-      entryIds
-    );
-    for (const c of cmts) (commentsByEntry[c.parent_id] ||= []).push(c);
-
-    const mentions = await db.getAllAsync(
-      `SELECT l.entry_id AS entry_id, t.id AS m_id, t.name AS m_name
-         FROM entry_thread_links l
-         JOIN threads t ON t.id = l.thread_id
-        WHERE l.entry_id IN (${ph})
-        ORDER BY l.entry_id ASC, l.position ASC, l.id ASC`,
-      entryIds
-    );
-    for (const m of mentions)
-      (mentionsByEntry[m.entry_id] ||= []).push({
-        threadId: m.m_id,
-        name: m.m_name,
-      });
-  }
+  const { photosByEntry, voiceByEntry, commentsByEntry, mentionsByEntry } =
+    await loadEntryExtras(db, entryIds);
 
   const threadComments = await db.getAllAsync(
     `SELECT * FROM comments
@@ -446,6 +451,45 @@ export async function getThreadExportData(threadId) {
     beads,
     threadComments,
   };
+}
+
+// Raw single-entry load: no thread_beads row, so the bead carries no id
+// or position. The snapshot falls back to the same weekday placeholder
+// the entry's day auto-thread would show (spec §5.4).
+export async function getEntryExportData(entryId) {
+  const db = getDb();
+  if (!db) throw new Error('getEntryExportData: database not ready');
+
+  const row = await db.getFirstAsync('SELECT * FROM entries WHERE id = ?', [
+    entryId,
+  ]);
+  if (!row) throw new Error(`getEntryExportData: no entry ${entryId}`);
+
+  const x = await loadEntryExtras(db, [entryId]);
+  const bead = {
+    beadId: null,
+    entryId: row.id,
+    position: null,
+    snapshot: readBead(row) || placeholderBeadForDate(row.date),
+    sectionLabel: null,
+    orphan: false,
+    placeholder: !hasBead(row), // same rule as the entry's day auto-thread
+    entry: {
+      title: row.title,
+      content: row.content,
+      date: row.date,
+      time: row.time,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      isPrivate: !!row.is_private,
+      highlightTier: row.highlight_tier || 0,
+    },
+    photos: x.photosByEntry[row.id] || [],
+    voice: x.voiceByEntry[row.id] || [],
+    comments: x.commentsByEntry[row.id] || [],
+    mentions: x.mentionsByEntry[row.id] || [],
+  };
+  return { entry: row, bead };
 }
 
 // ---------------------------------------------------------------------------
@@ -507,9 +551,14 @@ function emitComment(c, level) {
   return out.join('\n');
 }
 
+// A single-entry export has no thread_beads row, so no bead id.
+function beadSvgName(bead) {
+  return bead.beadId == null ? 'bead.svg' : `bead-${bead.beadId}.svg`;
+}
+
 function emitBead(bead, level, thread, options) {
   const out = [];
-  const tid = thread.id;
+  const tid = thread && thread.id;
   const e = bead.entry;
   const priv = e ? isPrivate({ is_private: e.isPrivate ? 1 : 0 }) : false;
   const hidePrivate = priv && !options.includePrivate;
@@ -533,17 +582,21 @@ function emitBead(bead, level, thread, options) {
   const mo = bead.snapshot.mood || 'slate';
   const moodInfo = MOOD_BY_KEY[mo] || MOOD_BY_KEY.slate;
   out.push(':PROPERTIES:');
-  out.push(`:ID: vakana-thread-${tid}-bead-${bead.beadId}`);
-  out.push(`:VAKANA_BEAD_ID: ${bead.beadId}`);
+  if (bead.beadId == null) {
+    out.push(`:ID: vakana-entry-${bead.entryId}`);
+  } else {
+    out.push(`:ID: vakana-thread-${tid}-bead-${bead.beadId}`);
+    out.push(`:VAKANA_BEAD_ID: ${bead.beadId}`);
+  }
   if (!bead.orphan) out.push(`:VAKANA_ENTRY_ID: ${bead.entryId}`);
-  out.push(`:VAKANA_POSITION: ${bead.position}`);
+  if (bead.beadId != null) out.push(`:VAKANA_POSITION: ${bead.position}`);
   out.push(`:BEAD_SHAPE: ${sh}`);
   out.push(`:BEAD_PATTERN: ${bead.snapshot.pattern || 'solid'}`);
   out.push(`:BEAD_MOOD: ${mo}`);
   out.push(`:BEAD_MOOD_LABEL: ${moodInfo.label}`);
   out.push(`:BEAD_MOOD_COLOR: ${moodInfo.color}`);
   out.push(`:BEAD_GLYPH: ${bead.snapshot.glyph || ''}`);
-  out.push(`:BEAD_SVG: assets/bead-${bead.beadId}.svg`);
+  out.push(`:BEAD_SVG: assets/${beadSvgName(bead)}`);
   if (e) out.push(`:HIGHLIGHT_TIER: ${e.highlightTier}`);
   if (e && e.date) out.push(`:VAKANA_DATE: ${e.date}`);
   if (e && e.time) out.push(`:VAKANA_TIME: ${e.time}`);
@@ -555,7 +608,7 @@ function emitBead(bead, level, thread, options) {
   out.push(':END:');
 
   if (e && e.date) out.push(orgInactiveDate(e.date, e.time));
-  out.push(`[[file:assets/bead-${bead.beadId}.svg]]`);
+  out.push(`[[file:assets/${beadSvgName(bead)}]]`);
 
   if (hidePrivate) {
     out.push('# (private: body excluded at export)');
@@ -646,6 +699,44 @@ function emitPreamble(data, options) {
   return L.join('\n');
 }
 
+// org-datetree (spec §5.2) body, shared by the thread and single-entry
+// emitters. Group dated beads by date; undated (orphans w/o a date)
+// collected under a trailing node.
+function emitDatetree(beads, thread, options) {
+  const parts = [];
+  const dated = beads.filter((b) => b.entry && b.entry.date);
+  const undated = beads.filter((b) => !(b.entry && b.entry.date));
+  const byDate = new Map();
+  for (const b of dated) {
+    const k = b.entry.date.slice(0, 10);
+    if (!byDate.has(k)) byDate.set(k, []);
+    byDate.get(k).push(b);
+  }
+  const keys = [...byDate.keys()].sort(); // YYYY-MM-DD sorts chronologically
+  let curY = null;
+  let curM = null;
+  for (const k of keys) {
+    const h = datetreeHeadings(k);
+    if (!h) continue;
+    if (h.year !== curY) {
+      parts.push(`* ${h.year}`);
+      curY = h.year;
+      curM = null;
+    }
+    if (h.month !== curM) {
+      parts.push(`** ${h.month}`);
+      curM = h.month;
+    }
+    parts.push(`*** ${h.day}`);
+    parts.push(emitBeadGroup(byDate.get(k), 4, thread, options));
+  }
+  if (undated.length) {
+    parts.push('* (undated)');
+    parts.push(emitBeadGroup(undated, 2, thread, options));
+  }
+  return parts;
+}
+
 // Build the complete .org document for one thread.
 export function emitOrgDocument(data, options = {}) {
   const opts = { ...DEFAULT_ORG_OPTIONS, ...options };
@@ -660,38 +751,7 @@ export function emitOrgDocument(data, options = {}) {
   }
 
   if (data.isAuto) {
-    // org-datetree (spec §5.2). Group dated beads by date; undated
-    // (orphans w/o a date) collected under a trailing node.
-    const dated = data.beads.filter((b) => b.entry && b.entry.date);
-    const undated = data.beads.filter((b) => !(b.entry && b.entry.date));
-    const byDate = new Map();
-    for (const b of dated) {
-      const k = b.entry.date.slice(0, 10);
-      if (!byDate.has(k)) byDate.set(k, []);
-      byDate.get(k).push(b);
-    }
-    const keys = [...byDate.keys()].sort(); // YYYY-MM-DD sorts chronologically
-    let curY = null;
-    let curM = null;
-    for (const k of keys) {
-      const h = datetreeHeadings(k);
-      if (!h) continue;
-      if (h.year !== curY) {
-        parts.push(`* ${h.year}`);
-        curY = h.year;
-        curM = null;
-      }
-      if (h.month !== curM) {
-        parts.push(`** ${h.month}`);
-        curM = h.month;
-      }
-      parts.push(`*** ${h.day}`);
-      parts.push(emitBeadGroup(byDate.get(k), 4, data.thread, opts));
-    }
-    if (undated.length) {
-      parts.push('* (undated)');
-      parts.push(emitBeadGroup(undated, 2, data.thread, opts));
-    }
+    parts.push(...emitDatetree(data.beads, data.thread, opts));
   } else {
     // Flat outline (spec §5.1).
     parts.push(emitBeadGroup(data.beads, 1, data.thread, opts));
@@ -700,9 +760,33 @@ export function emitOrgDocument(data, options = {}) {
   return `${parts.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
 }
 
+// Build the complete .org document for one entry: minimal preamble, then
+// the entry as an org-datetree node (thread = null: single entry, no
+// chain). Same finishing pass as emitOrgDocument.
+export function emitEntryOrgDocument(data, options = {}) {
+  const opts = { ...DEFAULT_ORG_OPTIONS, ...options };
+  const { entry } = data;
+  const L = [];
+  L.push(`#+TITLE: ${oneLine(entry.title) || 'Untitled'}`);
+  L.push('#+FILETAGS: :vakana:');
+  L.push('#+STARTUP: showeverything inlineimages');
+  L.push('#+TODO: | DONE');
+  L.push(`#+VAKANA_SCHEMA: ${ORG_EXPORT_SCHEMA}`);
+  if (!opts.reproducible) {
+    L.push(`#+VAKANA_APP_VERSION: ${opts.appVersion || ''}`);
+    L.push(`#+VAKANA_EXPORTED_AT: ${orgTimestamp(new Date().toISOString(), false)}`);
+  }
+  L.push(`#+VAKANA_ENTRY_ID: ${entry.id}`);
+  L.push('#+PROPERTY: header-args :eval never');
+
+  const parts = [L.join('\n'), ''];
+  parts.push(...emitDatetree([data.bead], null, opts));
+
+  return `${parts.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
+}
+
 // ---------------------------------------------------------------------------
-// Orchestrator: load + emit are done; asset copy + JSZip + share are
-// the next commit on this branch (spec §2/§6/§11).
+// Orchestrators: load + emit + zip + share (spec §2/§6/§11).
 // ---------------------------------------------------------------------------
 
 // prepPhotoForExport in threadArticles.js is module-private; this is the
@@ -804,6 +888,54 @@ const VAKANA_EL = `;;; vakana.el --- helpers for a Vakana Org export  -*- lexica
 ;;; vakana.el ends here
 `;
 
+// Bead SVGs + photo/voice bytes into the zip's assets folder. Sequential
+// copy (peak memory = one prepped asset, the existing export pattern).
+// SVG + metadata always travel, even for private-excluded beads (the
+// chain's visual truth isn't secret; spec §8); photo/voice bytes are
+// skipped for private-excluded beads. Returns the names of the files
+// that could not be read.
+async function addBeadAssets(assets, beads, opts) {
+  const missing = [];
+  for (const b of beads) {
+    assets.file(beadSvgName(b), renderBeadSvg(b.snapshot));
+  }
+  for (const b of beads) {
+    const priv = b.entry ? !!b.entry.isPrivate : false;
+    if (priv && !opts.includePrivate) continue;
+    for (let i = 0; i < b.photos.length; i++) {
+      const b64 = await photoBase64(b.photos[i]);
+      if (b64) assets.file(`photo-${b.entryId}-${i + 1}.jpg`, b64, { base64: true });
+      else missing.push(`photo-${b.entryId}-${i + 1}.jpg`);
+    }
+    for (let i = 0; i < b.voice.length; i++) {
+      const v = b.voice[i];
+      const b64 = await fileBase64(v.uri);
+      const ext = uriExt(v.uri, 'm4a');
+      if (b64)
+        assets.file(`voice-${b.entryId}-${i + 1}.${ext}`, b64, { base64: true });
+      else missing.push(`voice-${b.entryId}-${i + 1}.${ext}`);
+    }
+  }
+  return missing;
+}
+
+// Zip bytes into the cache, under the given filename (the share and
+// save-to-device paths both start from this artifact).
+async function writeZipToCache(zip, filename, missing) {
+  const zb64 = await zip.generateAsync({ type: 'base64' });
+  const uri = `${FileSystem.cacheDirectory}${filename}`;
+  await FileSystem.writeAsStringAsync(uri, zb64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return {
+    uri,
+    filename,
+    mimeType: 'application/zip',
+    UTI: 'public.zip-archive',
+    missing,
+  };
+}
+
 // Build the Org `.zip` into the cache and return the artifact (mirrors
 // threadArticles.buildArticleArtifact so share & save-to-device are
 // symmetric with the other formats).
@@ -822,45 +954,9 @@ async function buildThreadOrgZip(threadId, options = {}) {
   if (opts.includeVakanaEl) root.file('vakana.el', VAKANA_EL);
 
   const assets = root.folder('assets');
-  const missing = [];
-  // Bead SVG + metadata always travel, even for private-excluded beads
-  // (the chain's visual truth isn't secret; spec §8).
-  for (const b of data.beads) {
-    assets.file(`bead-${b.beadId}.svg`, renderBeadSvg(b.snapshot));
-  }
-  // Photo/voice bytes: sequential (peak memory = one prepped asset, the
-  // existing export pattern). Skipped for private-excluded beads.
-  for (const b of data.beads) {
-    const priv = b.entry ? !!b.entry.isPrivate : false;
-    if (priv && !opts.includePrivate) continue;
-    for (let i = 0; i < b.photos.length; i++) {
-      const b64 = await photoBase64(b.photos[i]);
-      if (b64) assets.file(`photo-${b.entryId}-${i + 1}.jpg`, b64, { base64: true });
-      else missing.push(`photo-${b.entryId}-${i + 1}.jpg`);
-    }
-    for (let i = 0; i < b.voice.length; i++) {
-      const v = b.voice[i];
-      const b64 = await fileBase64(v.uri);
-      const ext = uriExt(v.uri, 'm4a');
-      if (b64)
-        assets.file(`voice-${b.entryId}-${i + 1}.${ext}`, b64, { base64: true });
-      else missing.push(`voice-${b.entryId}-${i + 1}.${ext}`);
-    }
-  }
+  const missing = await addBeadAssets(assets, data.beads, opts);
 
-  const zb64 = await zip.generateAsync({ type: 'base64' });
-  const filename = `${slug}.zip`;
-  const uri = `${FileSystem.cacheDirectory}${filename}`;
-  await FileSystem.writeAsStringAsync(uri, zb64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  return {
-    uri,
-    filename,
-    mimeType: 'application/zip',
-    UTI: 'public.zip-archive',
-    missing,
-  };
+  return writeZipToCache(zip, `${slug}.zip`, missing);
 }
 
 /**
@@ -876,6 +972,39 @@ export async function exportThreadOrg(threadId, options = {}) {
   await Sharing.shareAsync(a.uri, {
     mimeType: a.mimeType,
     dialogTitle: 'Export thread to Org',
+    UTI: a.UTI,
+  });
+  return { uri: a.uri, filename: a.filename, missing: a.missing };
+}
+
+/**
+ * Build and **share** the Org `.zip` of one entry (OS share sheet; spec
+ * §1: no transport, no sync).
+ * @returns {Promise<{ uri, filename, missing:string[] }>}
+ */
+export async function exportEntryOrg(entryId, options = {}) {
+  const opts = { ...DEFAULT_ORG_OPTIONS, ...options };
+  const data = await getEntryExportData(entryId);
+  const appVersion = appConfig?.expo?.version || '';
+  const org = emitEntryOrgDocument(data, { ...opts, appVersion });
+
+  // Same naming as the Markdown entry export (`slug-date`).
+  const base =
+    `${slugify(data.entry.title) || `entry-${data.entry.id}`}-` +
+    `${data.entry.date || 'undated'}`;
+  const zip = new JSZip();
+  const root = zip.folder(base);
+  root.file(`${base}.org`, org);
+  const assets = root.folder('assets');
+  const missing = await addBeadAssets(assets, [data.bead], opts);
+
+  const a = await writeZipToCache(zip, `${base}.zip`, missing);
+  if (!(await Sharing.isAvailableAsync())) {
+    throw new Error('Sharing is not available on this device');
+  }
+  await Sharing.shareAsync(a.uri, {
+    mimeType: a.mimeType,
+    dialogTitle: 'Export entry to Org',
     UTI: a.UTI,
   });
   return { uri: a.uri, filename: a.filename, missing: a.missing };

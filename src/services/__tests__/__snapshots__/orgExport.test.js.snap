@@ -1,0 +1,78 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`emitOrgDocument auto-day thread renders as an org-datetree 1`] = `
+"#+TITLE: Days
+#+FILETAGS: :vakana:
+#+STARTUP: showeverything inlineimages
+#+TODO: | DONE
+#+VAKANA_SCHEMA: 3
+#+VAKANA_THREAD_ID: 7
+#+VAKANA_THREAD_KIND: auto_day
+#+VAKANA_ANCHOR_KIND: day
+#+VAKANA_ANCHOR_DATE: 2026-05-12
+#+VAKANA_THREAD_CREATED_AT: [2026-05-12 Tue 11:00]
+#+VAKANA_THREAD_UPDATED_AT: [2026-05-12 Tue 11:00]
+#+PROPERTY: header-args :eval never
+
+* The thread
+[[file:chain.svg]]
+
+* 2026
+** 2026-05 May
+*** 2026-05-12 Tuesday
+**** Market day
+:PROPERTIES:
+:ID: vakana-thread-7-bead-101
+:VAKANA_BEAD_ID: 101
+:VAKANA_ENTRY_ID: 42
+:VAKANA_POSITION: 202605121430000030
+:BEAD_SHAPE: lozenge
+:BEAD_PATTERN: solid
+:BEAD_MOOD: amber
+:BEAD_MOOD_LABEL: Slate
+:BEAD_MOOD_COLOR: #8a8d92
+:BEAD_GLYPH: 
+:BEAD_SVG: assets/bead-101.svg
+:HIGHLIGHT_TIER: 0
+:VAKANA_DATE: 2026-05-12
+:VAKANA_TIME: 14:30
+:VAKANA_CREATED_AT: [2026-05-12 Tue 11:00]
+:VAKANA_UPDATED_AT: [2026-05-12 Tue 11:00]
+:END:
+[2026-05-12 Tue 14:30]
+[[file:assets/bead-101.svg]]
+Vanilla was cheap today.
+***** Photos
+[[file:assets/photo-42-1.jpg]]
+***** Comments
+****** DONE Comment: [2026-05-12 Tue 13:00]
+:PROPERTIES:
+:VAKANA_COMMENT_ID: 3
+:VAKANA_RESOLVED_AT: [2026-05-13 Wed 12:00]
+:END:
+Buy vanilla beans at the market
+** 2026-06 June
+*** 2026-06-01 Monday
+**** Rain
+:PROPERTIES:
+:ID: vakana-thread-7-bead-102
+:VAKANA_BEAD_ID: 102
+:VAKANA_ENTRY_ID: 43
+:VAKANA_POSITION: 202606010000000030
+:BEAD_SHAPE: round
+:BEAD_PATTERN: solid
+:BEAD_MOOD: slate
+:BEAD_MOOD_LABEL: Slate
+:BEAD_MOOD_COLOR: #8a8d92
+:BEAD_GLYPH: 
+:BEAD_SVG: assets/bead-102.svg
+:HIGHLIGHT_TIER: 0
+:VAKANA_DATE: 2026-06-01
+:VAKANA_CREATED_AT: [2026-06-01 Mon 15:00]
+:VAKANA_UPDATED_AT: [2026-06-01 Mon 15:00]
+:END:
+[2026-06-01 Mon]
+[[file:assets/bead-102.svg]]
+Quiet afternoon.
+"
+`;
