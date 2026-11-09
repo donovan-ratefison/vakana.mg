@@ -27,6 +27,8 @@ feature, and this contract rejects it below.
 - A **user thread** becomes a flat Org outline.
 - An **auto-thread** becomes a native **`org-datetree`**. This is the
   primary mapping (§5).
+- A **single entry** also exports to one `.zip`, from the entry editor.
+  §17 specifies this flow.
 - The export maps these items with as little loss as possible:
   - the thread metadata
   - the bead chain (snapshot grammar and rendered SVG)
@@ -837,3 +839,118 @@ uses a Vakana primitive and passes the swap test:
 6. CHANGELOG entry and version bump **at ship**, not for this
    specification document. Run the release-doc sweep, including the
    possibilities bullets of §15.
+
+---
+
+## 17. Single-entry export
+
+The entry editor exports **one entry** to one `.zip`. The flow reuses
+the grammar of this document: the same datetree (§5.2), the same
+heading shape (§5.4), the same Markdown→Org transform (§7), and the
+same asset rules (§6.4). It adds one preamble key (`#+VAKANA_ENTRY_ID`)
+and one ID form (`vakana-entry-<id>`). The thread export output does not
+change, so `#+VAKANA_SCHEMA` stays **3**.
+
+### Entry point
+
+The entry editor header has the share icon. It opens the **Export
+entry** sheet. The sheet is format-first, as for a thread (§11). The
+format list holds four formats: Markdown, HTML, **Org (Emacs)**, Card
+(PNG). Org sits between HTML and Card.
+
+The app completes the pending auto-save before the export. Thus the zip
+agrees with the content on screen. The Org panel has one action,
+**Share**. It has no **Save to device** and no options, as for the
+other entry formats.
+
+### Zip layout
+
+Archive name: `<slug>-<date>.zip`. The base name is the same as the
+entry Markdown export: the slug of the entry title, or `entry-<id>`
+when the title is empty; then the `entries.date`, or `undated` when the
+entry has no date.
+
+```
+<slug>-<date>/
+  <slug>-<date>.org
+  assets/
+    bead.svg                   # the bead of the entry
+    photo-<entryId>-<n>.jpg    # copied, resized photo bytes (§6.4)
+    voice-<entryId>-<n>.<ext>  # copied voice-note bytes, original ext (§6.4)
+```
+
+There is no `README.org`, no `vakana.el` and no `chain.svg`. One entry
+has no chain to render, and the file is small enough to read without a
+companion.
+
+### Preamble
+
+```org
+#+TITLE: <entries.title>
+#+FILETAGS: :vakana:
+#+STARTUP: showeverything inlineimages
+#+TODO: | DONE
+#+VAKANA_SCHEMA: 3
+#+VAKANA_APP_VERSION: <package.json version at export>
+#+VAKANA_EXPORTED_AT: [<inactive timestamp>]
+#+VAKANA_ENTRY_ID: <entries.id>
+#+PROPERTY: header-args :eval never
+```
+
+No `#+VAKANA_THREAD_*` key exists. One entry is not a thread, and the
+file must not claim a thread identity.
+
+### Body: one entry in the datetree
+
+The body is the same **org-datetree** as an auto-thread (§5.2):
+
+```org
+* 2026
+** 2026-05 May
+*** 2026-05-12 Tuesday
+**** <the entry>            ; level 4, as §5.2
+```
+
+An entry without a date goes under a synthetic `* (undated)` node, and
+the entry heading sits at level 2 below it.
+
+Because the body is a datetree, the note import
+(`docs/architecture/note-import.md`) reads this file as **one note per
+day**. The user can refile the `.org` file into a larger journal file,
+and the app imports the days back as dated drafts.
+
+### The entry heading
+
+The heading follows §5.4: the title and its tags, the `:PROPERTIES:`
+drawer, the inactive timestamp, the inline SVG, the body, then the
+`Photos`, `Voice notes`, `Comments` and `Mentions` sub-headings. Three
+differences apply:
+
+1. The ID is `:ID: vakana-entry-<entries.id>`, not a bead ID.
+2. There is no `:VAKANA_BEAD_ID:` and no `:VAKANA_POSITION:`. The
+   entry has no `thread_beads` row.
+3. The SVG is `assets/bead.svg`, not `assets/bead-<beadId>.svg`. The
+   zip holds one bead only.
+
+### The bead
+
+The bead comes from the live `entries.bead_*` columns, not from a
+snapshot: a single entry has no `thread_beads` row to freeze. When the
+entry has no bead, the export writes the placeholder bead of the day
+(`placeholderBeadForDate`, the same rule as the day auto-thread) and
+marks the heading with the `:placeholder:` tag (§5.4).
+
+### Privacy
+
+The export always includes the private content. The user exports the
+entry that is open on the screen, so a mask has no purpose. The **Include private entries** option (§8) does not apply to
+this flow. A private entry keeps the `:private:crypt:` tags and the
+`:VAKANA_PRIVATE: t` property, so the user can encrypt the subtree in
+Emacs.
+
+### Code
+
+`src/services/orgExport.js` holds three new exports:
+`getEntryExportData(entryId)`, `emitEntryOrgDocument(data)` and
+`exportEntryOrg(entryId)`. The emitter shares the datetree, drawer and
+transform helpers with `exportThreadOrg`.

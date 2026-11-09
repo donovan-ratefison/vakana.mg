@@ -715,10 +715,11 @@ With Vakana, you can share the content of your journal, and you do not have to w
 
 The header of the entry editor has a **share** icon between the comments chip and the trash icon. Tap it to open the **Export** sheet. The app first completes the pending auto-save. Thus the exported file agrees with the content on screen.
 
-The sheet is **format-first**. You select a format, then a per-format detail panel appears. Use the back chevron to go back to the format list. There are three formats:
+The sheet is **format-first**. You select a format, then a per-format detail panel appears. Use the back chevron to go back to the format list. There are four formats:
 
 - **📄 Markdown**: `<slug>-<date>.md` with YAML frontmatter (`title`, `date`, `created_at`, `updated_at`, `photos`). You can put the file into Hugo / Jekyll / Astro / Zola / Substack / Obsidian. The file lists photos and voice notes by filename and does not include them. A tap on Markdown goes directly to the Share action, with no other options.
 - **🌐 HTML**: one self-contained HTML file. The panel shows a **template radio** with the same five skins that the thread article composer uses (Editorial / Journal / Minimal / Storyboard / Postcard). Photos are embedded as base64, thus the file works offline. *Storyboard* and *Postcard* render the comments of the entry inline (reply bubbles / sticky notes). The other three are long-form prose.
+- **🔮 Org (Emacs)**: a self-contained `.zip` that you can use in Emacs (refer to [Org-mode export](#org-mode-export-the-emacs-bridge) below). The body of the `.org` file is an org-datetree, so the entry lands under its own day (`* 2026 / ** 2026-05 / *** 2026-05-12`). The zip carries the bead of the entry as an inline SVG, and it copies each photo and voice note into an `assets/` folder. The panel has only the **Share** action.
 - **🖼 Card (PNG)**: a 1080 × 1350 portrait social card.
   - The card shows the bead avatar inline with the title and one polaroid photo (lightly tilted, with a soft drop shadow). It also shows an excerpt of the body and a "VAKANA" logo wordmark footer.
   - If the entry has more than one photo, a picker asks which photo becomes the hero. Two other photos show as the edges of stacked polaroids behind the main photo.

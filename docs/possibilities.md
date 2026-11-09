@@ -374,7 +374,7 @@ The article composer changes a thread into a post that you can share as Markdown
 
 ## 🌉 A second life in Emacs (Org export)
 
-A thread exports as a `.zip` for use in Emacs. The export maps the data to the Org grammar. Auto-threads become a native datetree. Mentions become org-roam links. The bead facets become a drawer that you can query, with an inline SVG. The export is one-way and final. Give the zip to the OS, and continue the journal in Emacs.
+A thread or a single entry exports as a `.zip` for use in Emacs. The export maps the data to the Org grammar. Auto-threads become a native datetree. Mentions become org-roam links. The bead facets become a drawer that you can query, with an inline SVG. The export is one-way and final. Give the zip to the OS, and continue the journal in Emacs.
 
 - **org-datetree for free**: A day, week or month auto-thread exports as a native `* 2026 / ** 2026-05 / *** 2026-05-17` tree. Years of journal then work with `org-agenda` and datetree navigation, with no changes.
 - **The roam graph absorbs the journal**: Each entry has a generated `:ID:`, and each mention becomes an `[[id:]]` link. Your thread cross-references go into an org-roam graph as nodes.
@@ -387,6 +387,7 @@ A thread exports as a `.zip` for use in Emacs. The export maps the data to the O
 - **Locked entries stay locked across the bridge**: The export writes locked entries as masked stubs or `:crypt:`-tagged nodes. A thread can go into Emacs, and your private entries do not become plain text.
 - **vakana.el on tap**: The zip contains an optional helper. Put it into your config, and Emacs renders the beads and reads the properties. You write no elisp.
 - **Fuse, then bridge**: Fuse a capture burst into one entry first. Then the fused bead, and not the burst, goes into your agenda and roam graph.
+- **One note, already filed**: Export a single note of the day as Org and drop it into your `journal.org`. It arrives under its own datetree day, with its bead as an inline SVG and its comments below the node.
 
 ## 📥 The desktop hands it back (note import)
 
