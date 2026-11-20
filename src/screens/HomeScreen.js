@@ -1202,7 +1202,8 @@ export default function HomeScreen({ navigation, route }) {
     hasPhoto,
     hasVoice,
     inlineComments,
-    homePinnedThreadId,
+    // shortcut: declared further down, so a browser throws on this read where Hermes yields undefined; move the declaration above this hook and drop the guard.
+    Platform.OS === 'web' ? undefined : homePinnedThreadId,
   ]);
 
   // Glyph set changes rarely (only when beads are edited elsewhere); the
@@ -1213,7 +1214,8 @@ export default function HomeScreen({ navigation, route }) {
     loadGlyphsInUse();
     loadPresets();
     loadBackupNudge();
-  }, [loadGlyphsInUse, loadPresets, loadBackupNudge]);
+    // shortcut: declared further down, so a browser throws on this read where Hermes yields undefined; move the declaration above this hook and drop the guard.
+  }, [loadGlyphsInUse, loadPresets, Platform.OS === 'web' ? undefined : loadBackupNudge]);
 
   // Wander: mount-only settings load so the first focus event isn't
   // the only path that fills wanderEnabled / wanderThresholdDays. Without
