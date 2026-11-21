@@ -17,6 +17,7 @@ import {
 } from 'expo-audio';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useTheme } from '../theme';
+import { warn } from '../utils/log';
 
 // Keep the screen awake during the quick capture so inactivity sleep can't
 // cut the take short. Tag-scoped; distinct from the editor recorder's tag.
@@ -75,9 +76,10 @@ export default function QuickVoiceModal({ visible, onSave, onCancel }) {
   // (save, cancel, error, or the modal closing) via the cleanup.
   useEffect(() => {
     if (!recorderState.isRecording) return undefined;
-    activateKeepAwakeAsync(KEEP_AWAKE_TAG);
+    // A browser can refuse the wake lock: the take goes on without it.
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch((e) => warn('quickVoice.keepAwake', e));
     return () => {
-      deactivateKeepAwake(KEEP_AWAKE_TAG);
+      deactivateKeepAwake(KEEP_AWAKE_TAG).catch((e) => warn('quickVoice.keepAwake', e));
     };
   }, [recorderState.isRecording]);
 

@@ -71,6 +71,17 @@ describe('openMediaFile on web', () => {
     expect(getDirectory).not.toHaveBeenCalled();
   });
 
+  // The refusal comes from OPFS: getDirectoryHandle rejects the name "..".
+  it('returns null for a reference with a ".." part', async () => {
+    const tree = new Map([[PHOTOS, new Map()], ['', new Map([['x', 42]])]]);
+    Object.defineProperty(global, 'navigator', {
+      value: { storage: { getDirectory: async () => fakeDir(tree, '') } },
+      configurable: true,
+    });
+
+    expect(await openMediaFile('opfs:attachments/../x')).toBeNull();
+  });
+
   it('returns the file of a reference into attachments/', async () => {
     const tree = new Map([[PHOTOS, new Map([['a.png', 42]])]]);
     Object.defineProperty(global, 'navigator', {

@@ -64,6 +64,11 @@ export default function DragFab({ onPress, onCamera, onMic }) {
     [onCamera, onMic]
   );
 
+  // The PanResponder is created once: a new one in the middle of a gesture
+  // starts from an empty gesture state. Its handlers read the live props here.
+  const live = useRef(null);
+  live.current = { onPress, onCamera, onMic, targets };
+
   const dragModeRef = useRef(false);
   const tapTimer = useRef(null);
   const pendingTapRef = useRef(false);
@@ -102,7 +107,7 @@ export default function DragFab({ onPress, onCamera, onMic }) {
         onPanResponderMove: (_, g) => {
           if (dragModeRef.current) {
             pan.setValue({ x: g.dx, y: g.dy });
-            const next = getActiveTarget(g.dx, g.dy, targets);
+            const next = getActiveTarget(g.dx, g.dy, live.current.targets);
             setActiveTarget((cur) => (cur === next ? cur : next));
           } else if (Math.hypot(g.dx, g.dy) > TAP_MOVE_THRESHOLD) {
             // moved before long-press fired: cancel tap and don't enter drag mode
@@ -113,13 +118,13 @@ export default function DragFab({ onPress, onCamera, onMic }) {
         onPanResponderRelease: (_, g) => {
           clearTimeout(tapTimer.current);
           if (dragModeRef.current) {
-            const target = getActiveTarget(g.dx, g.dy, targets);
+            const target = getActiveTarget(g.dx, g.dy, live.current.targets);
             exitDragMode();
-            if (target === 'camera') onCamera?.();
-            else if (target === 'mic') onMic?.();
+            if (target === 'camera') live.current.onCamera?.();
+            else if (target === 'mic') live.current.onMic?.();
           } else if (pendingTapRef.current) {
             pendingTapRef.current = false;
-            onPress?.();
+            live.current.onPress?.();
           }
         },
         onPanResponderTerminate: () => {
@@ -128,7 +133,7 @@ export default function DragFab({ onPress, onCamera, onMic }) {
           if (dragModeRef.current) exitDragMode();
         },
       }),
-    [onPress, onCamera, onMic, targets]
+    []
   );
 
   return (
@@ -165,21 +170,27 @@ export default function DragFab({ onPress, onCamera, onMic }) {
         </View>
       )}
 
-      <Animated.View
+      {/* The touch area stays at the rest position: a press there starts a
+          gesture while the button still springs back from the last drag. */}
+      <View
         {...panResponder.panHandlers}
-        style={[
-          styles.fab,
-          {
-            transform: [
-              { translateX: pan.x },
-              { translateY: pan.y },
-            ],
-          },
-        ]}
+        style={styles.fabTouch}
         accessibilityLabel="New entry. Long-press, then drag to add a photo or a voice note."
       >
-        <Ionicons name="add" size={32} color={colors.primaryOnPrimary} />
-      </Animated.View>
+        <Animated.View
+          style={[
+            styles.fab,
+            {
+              transform: [
+                { translateX: pan.x },
+                { translateY: pan.y },
+              ],
+            },
+          ]}
+        >
+          <Ionicons name="add" size={32} color={colors.primaryOnPrimary} />
+        </Animated.View>
+      </View>
     </>
   );
 }
@@ -190,10 +201,18 @@ const makeStyles = (colors) =>
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(0,0,0,0.35)',
     },
-    fab: {
+    // elevation without a background draws no shadow: it keeps the draw order.
+    fabTouch: {
       position: 'absolute',
       right: 24,
       bottom: 24,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+      borderRadius: FAB_SIZE / 2,
+      elevation: 6,
+      zIndex: 2,
+    },
+    fab: {
       width: FAB_SIZE,
       height: FAB_SIZE,
       borderRadius: FAB_SIZE / 2,
@@ -205,7 +224,6 @@ const makeStyles = (colors) =>
       shadowOffset: { width: 0, height: 3 },
       shadowOpacity: 0.25,
       shadowRadius: 6,
-      zIndex: 2,
     },
     target: {
       position: 'absolute',

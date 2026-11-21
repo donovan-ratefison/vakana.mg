@@ -15,6 +15,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { persistMediaUri } from '../services/mediaStore';
 import useMediaUrl from '../hooks/useMediaUrl';
+import { warn } from '../utils/log';
 import { useTheme } from '../theme';
 
 const RECORDING_OPTIONS = RecordingPresets.HIGH_QUALITY;
@@ -144,9 +145,10 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
   // error, or the component unmounting on nav-away) and never leaks.
   useEffect(() => {
     if (!recorderState.isRecording) return undefined;
-    activateKeepAwakeAsync(KEEP_AWAKE_TAG);
+    // A browser can refuse the wake lock: the take goes on without it.
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch((e) => warn('voice.keepAwake', e));
     return () => {
-      deactivateKeepAwake(KEEP_AWAKE_TAG);
+      deactivateKeepAwake(KEEP_AWAKE_TAG).catch((e) => warn('voice.keepAwake', e));
     };
   }, [recorderState.isRecording]);
 
@@ -221,6 +223,8 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
         }
         return;
       }
+      // On web, a replaced player is not stopped and plays on: pause it first.
+      player.pause();
       setPlayingIndex(index);
     } catch (err) {
       console.error('Failed to play recording', err);
@@ -228,7 +232,10 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
   };
 
   const removeRecording = (index) => {
-    if (playingIndex === index) setPlayingIndex(null);
+    if (playingIndex === index) {
+      player.pause();
+      setPlayingIndex(null);
+    }
     onRecordingsChange(recordings.filter((_, i) => i !== index));
   };
 
