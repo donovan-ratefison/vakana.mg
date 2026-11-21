@@ -26,6 +26,11 @@ import {
   BACKUP_MODE_MEDIA_ONLY,
 } from '../services/backup';
 import { getCurrentVault } from '../utils/vaults';
+import {
+  readStorageStatus,
+  askPersistentStorage,
+  storageStatusText,
+} from '../web/storageStatus';
 
 const STAGE_LABEL = {
   'reading-db': 'Reading database…',
@@ -74,6 +79,9 @@ export default function SettingsBackupScreen({ navigation }) {
   const [lastResult, setLastResult] = useState(null);
   // undefined = still loading (render nothing), null = never backed up.
   const [lastBackup, setLastBackup] = useState(undefined);
+  // Web only. undefined = still loading (render nothing).
+  const [storage, setStorage] = useState(undefined);
+  const [asking, setAsking] = useState(false);
 
   const refreshLastBackup = async (vaultId) => {
     try {
@@ -99,6 +107,26 @@ export default function SettingsBackupScreen({ navigation }) {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return undefined;
+    let alive = true;
+    readStorageStatus().then((s) => {
+      if (alive) setStorage(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const handleAskStorage = async () => {
+    setAsking(true);
+    try {
+      setStorage(await askPersistentStorage());
+    } finally {
+      setAsking(false);
+    }
+  };
 
   const handleExport = async (mode) => {
     if (busy) return;
@@ -229,6 +257,42 @@ export default function SettingsBackupScreen({ navigation }) {
           })()
         ) : null}
 
+        {Platform.OS === 'web' && storage !== undefined ? (
+          <>
+            <View
+              style={[styles.statusRow, !storage.persisted && styles.statusRowStale]}
+            >
+              <Ionicons
+                name={storage.persisted ? 'shield-checkmark-outline' : 'alert-circle'}
+                size={16}
+                color={storage.persisted ? colors.textMuted : colors.danger}
+              />
+              <Text
+                style={[
+                  styles.statusText,
+                  !storage.persisted && styles.statusTextStale,
+                ]}
+              >
+                {storageStatusText(storage)}
+              </Text>
+              {!storage.persisted && storage.canAsk ? (
+                <TouchableOpacity
+                  onPress={handleAskStorage}
+                  disabled={asking}
+                  accessibilityRole="button"
+                  style={asking && styles.actionDisabled}
+                >
+                  <Text style={styles.askText}>Ask again</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <Text style={styles.intro}>
+              Uninstalling the app or clearing the site data erases this
+              journal. Make a backup first.
+            </Text>
+          </>
+        ) : null}
+
         <Text style={styles.intro}>
           {Platform.OS === 'web'
             ? 'There are three kinds of backup. Each backup is one .zip file that the browser saves in your downloads. The browser builds the file in memory, so a very large media library can fail.'
@@ -355,6 +419,7 @@ const makeStyles = (colors) =>
     },
     statusText: { flex: 1, fontSize: 13, color: colors.textMuted },
     statusTextStale: { color: colors.danger, fontWeight: '600' },
+    askText: { fontSize: 13, fontWeight: '600', color: colors.primary },
     intro: { color: colors.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 16 },
     sectionLabel: {
       color: colors.textMuted,
