@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { warn } from './log';
 
@@ -182,28 +183,33 @@ export async function deleteVault(vaultId) {
   }
 
   // Remove DB file + WAL siblings + attachments folder.
-  const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
-  const candidates = [
-    target.dbFilename,
-    `${target.dbFilename}-journal`,
-    `${target.dbFilename}-wal`,
-    `${target.dbFilename}-shm`,
-  ];
-  for (const name of candidates) {
-    const uri = `${sqliteDir}${name}`;
-    try {
-      const info = await FileSystem.getInfoAsync(uri);
-      if (info.exists) await FileSystem.deleteAsync(uri, { idempotent: true });
-    } catch (e) {
-      warn('vaults.deleteVault.dbFile', e);
+  if (Platform.OS === 'web') {
+    // OPFS has no file paths. A failure throws: the vault stays in the registry.
+    await require('../web/deleteVaultFiles').deleteVaultFiles(target);
+  } else {
+    const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
+    const candidates = [
+      target.dbFilename,
+      `${target.dbFilename}-journal`,
+      `${target.dbFilename}-wal`,
+      `${target.dbFilename}-shm`,
+    ];
+    for (const name of candidates) {
+      const uri = `${sqliteDir}${name}`;
+      try {
+        const info = await FileSystem.getInfoAsync(uri);
+        if (info.exists) await FileSystem.deleteAsync(uri, { idempotent: true });
+      } catch (e) {
+        warn('vaults.deleteVault.dbFile', e);
+      }
     }
-  }
-  const attachDir = `${FileSystem.documentDirectory}attachments/${vaultId}/`;
-  try {
-    const info = await FileSystem.getInfoAsync(attachDir);
-    if (info.exists) await FileSystem.deleteAsync(attachDir, { idempotent: true });
-  } catch (e) {
-    warn('vaults.deleteVault.attachments', e);
+    const attachDir = `${FileSystem.documentDirectory}attachments/${vaultId}/`;
+    try {
+      const info = await FileSystem.getInfoAsync(attachDir);
+      if (info.exists) await FileSystem.deleteAsync(attachDir, { idempotent: true });
+    } catch (e) {
+      warn('vaults.deleteVault.attachments', e);
+    }
   }
 
   // Drop PIN keys for the vault.
