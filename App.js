@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, ActivityIndicator, StyleSheet, AppState } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, AppState, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
@@ -53,6 +53,9 @@ function AppShell() {
   // loaded once (not per vaultEpoch): the slides answer "what is this app",
   // which doesn't change when the vault does.
   const [showOnboarding, setShowOnboarding] = useState(null);
+  // Web only: the props of the full-screen notice that replaces every screen
+  // (database handed over to another window, or not opened). Null elsewhere.
+  const [bootNotice, setBootNotice] = useState(null);
   const { colors, resolved, ready: themeReady } = useTheme();
 
   const autoLockRef = useRef('off');
@@ -97,6 +100,26 @@ function AppShell() {
     let cancelled = false;
     async function prepare() {
       try {
+        if (Platform.OS === 'web') {
+          // The last window opened owns the database (src/web/dbHandover.js).
+          const handover = require('./src/web/dbHandover');
+          const yielded = {
+            message: 'Vakana is open in another window.',
+            actionLabel: 'Use here',
+            onAction: handover.useHere,
+          };
+          if (handover.isYielded()) {
+            setBootNotice(yielded);
+            return;
+          }
+          // The notice unmounts the navigator, so the editor runs its final
+          // save before this window reloads. The await ends when the window
+          // that owned the database has unloaded.
+          await handover.claimDatabase(() => {
+            setBootNotice(yielded);
+            handover.yieldToOtherWindow();
+          });
+        }
         await ensureRegistry();
         // Load the Caveat handwriting font at runtime. It was only ever
         // declared via the expo-font config plugin (native builds), so in
@@ -139,6 +162,15 @@ function AppShell() {
         rescueAndSweepMedia();
       } catch (e) {
         console.error('Database init error:', e?.message || e, e);
+        // Never the lock screen or the list over a database that is absent.
+        if (Platform.OS === 'web') {
+          setBootNotice({
+            message: 'Vakana could not open the journal.',
+            detail: e?.message || String(e),
+            actionLabel: 'Retry',
+            onAction: () => location.reload(),
+          });
+        }
       } finally {
         if (!cancelled) setIsReady(true);
       }
@@ -189,6 +221,11 @@ function AppShell() {
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
+  }
+
+  if (Platform.OS === 'web' && bootNotice) {
+    const BootNotice = require('./src/web/BootNotice').default;
+    return <BootNotice {...bootNotice} />;
   }
 
   // First launch: the intro slides come BEFORE the PIN gate. Asking a

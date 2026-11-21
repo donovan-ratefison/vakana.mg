@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as SystemUI from 'expo-system-ui';
 import { warn } from './utils/log';
@@ -305,6 +305,14 @@ export function ThemeProvider({ children }) {
   // default (white) under a dark theme.
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.background).catch(() => {});
+    if (Platform.OS === 'web') {
+      // expo-system-ui paints only <body>. The page behind it and the bar of
+      // the browser follow the theme too.
+      document.documentElement.style.backgroundColor = colors.background;
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute('content', colors.background);
+    }
   }, [colors.background]);
 
   return (

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
     <title>%WEB_TITLE%</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#f5ead5">
@@ -27,6 +27,26 @@
         display: flex;
         height: 100%;
         flex: 1;
+      }
+    </style>
+    <style>
+      /* The page behind the app has the colour of the app before the app paints. */
+      /* shortcut: the first paint follows the system scheme and the default palette, not a theme chosen in the app; set the stored theme from an inline script if that flash matters. */
+      html,
+      body {
+        background-color: #f5ead5;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background-color: #1c1310;
+        }
+      }
+      /* The app draws its own fields. Buttons keep the :focus-visible outline of the browser. */
+      input:focus,
+      textarea:focus,
+      [contenteditable]:focus {
+        outline: none;
       }
     </style>
   </head>
