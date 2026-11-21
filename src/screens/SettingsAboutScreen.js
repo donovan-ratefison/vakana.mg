@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Linking,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -34,6 +35,12 @@ const TAGLINE =
 export default function SettingsAboutScreen({ navigation }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // Web only: the cache name of the service worker, the print of this build.
+  const [build, setBuild] = useState(null);
+  useEffect(
+    () => (Platform.OS === 'web' ? require('../web/pwaUpdate').requestBuild(setBuild) : undefined),
+    []
+  );
 
   const openUrl = async (url) => {
     try {
@@ -67,6 +74,7 @@ export default function SettingsAboutScreen({ navigation }) {
             resizeMode="contain"
           />
           <Text style={styles.version}>v{appJson.expo.version}</Text>
+          {build ? <Text style={styles.version}>Build: {build}</Text> : null}
           <Text style={styles.tagline}>{TAGLINE}</Text>
         </View>
 

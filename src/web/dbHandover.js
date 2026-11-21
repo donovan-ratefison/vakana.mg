@@ -3,6 +3,8 @@
 // takes the database, and the window before it reloads to a notice.
 const FLAG = 'vakana_yielded';
 const GIVE_UP_MS = 10000;
+// shortcut: a fixed delay for the final save of the editor (measured: a title typed 5 ms before the steal was saved 5 times out of 5), replace it with an awaited save if a save can take longer.
+export const FINAL_SAVE_MS = 1000;
 const hold = () => new Promise(() => {});
 let claimed = false;
 
@@ -42,8 +44,7 @@ export async function claimDatabase(onStolen) {
 
 export function yieldToOtherWindow() {
   sessionStorage.setItem(FLAG, '1');
-  // shortcut: a fixed delay for the final save of the editor (measured: a title typed 5 ms before the steal was saved 5 times out of 5), replace it with an awaited save if a save can take longer.
-  setTimeout(() => location.reload(), 1000);
+  setTimeout(() => location.reload(), FINAL_SAVE_MS);
 }
 
 export function useHere() {

@@ -36,9 +36,15 @@ self.addEventListener('install', (event) => {
       .open(CACHE)
       // addAll rejects if one file fails: the install fails and the old build stays.
       .then((cache) => cache.addAll(FILES.map((file) => new Request(file, { cache: 'reload' }))))
-      // shortcut: skipWaiting can leave an open page on the old build while its cache is deleted (the network takes over), replace with an update prompt when a mixed build breaks a page.
-      .then(() => self.skipWaiting())
   );
+});
+
+// A new build waits while a page of the old build is open: that page keeps the
+// old service worker and the old cache, so it never mixes two builds. The page
+// sends SKIP_WAITING when it is ready to reload (src/web/pwaUpdate.js).
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'BUILD') event.source.postMessage({ type: 'BUILD', cache: CACHE });
 });
 
 self.addEventListener('activate', (event) => {

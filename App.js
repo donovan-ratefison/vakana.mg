@@ -66,6 +66,16 @@ function AppShell() {
   // transient 'inactive' iOS state), or null while foregrounded.
   const backgroundedAtRef = useRef(null);
 
+  // Web only: a new build of the PWA waits for this page (src/web/pwaUpdate.js).
+  // Before a reload, the full-screen notice unmounts the navigator, so the
+  // editor runs its final save.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    require('./src/web/pwaUpdate').setLocked(!isUnlocked, () =>
+      setBootNotice({ message: 'Updating Vakana…' })
+    );
+  }, [isUnlocked]);
+
   useEffect(() => {
     getAutoLock().then(setAutoLockState);
     getOnboardingSeen().then((seen) => setShowOnboarding(!seen));
@@ -253,6 +263,8 @@ function AppShell() {
 }
 
 export default function App() {
+  // Web only: the "New version ready" pill, above every screen.
+  const UpdateNotice = Platform.OS === 'web' ? require('./src/web/UpdateNotice').default : null;
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -266,6 +278,7 @@ export default function App() {
         <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
           <ThemeProvider>
             <AppShell />
+            {UpdateNotice ? <UpdateNotice /> : null}
           </ThemeProvider>
         </KeyboardProvider>
       </GestureHandlerRootView>
