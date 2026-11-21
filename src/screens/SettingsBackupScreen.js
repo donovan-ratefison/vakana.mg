@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -44,7 +45,10 @@ const EXPORT_MODES = [
     key: BACKUP_MODE_FULL,
     icon: 'archive-outline',
     label: 'Full backup',
-    hint: 'The database, all photos and all voice notes. The export streams natively, so memory use does not increase with size.',
+    hint:
+      Platform.OS === 'web'
+        ? 'The database, all photos and all voice notes.'
+        : 'The database, all photos and all voice notes. The export streams natively, so memory use does not increase with size.',
   },
   {
     key: BACKUP_MODE_DATA_ONLY,
@@ -115,7 +119,7 @@ export default function SettingsBackupScreen({ navigation }) {
         filename: result.filename,
       });
       try {
-        await shareBackup(result.uri);
+        await shareBackup(result.uri, result.filename);
         // Share sheet completed without throwing: the best proxy we have
         // for "the user produced a backup" (the API can't confirm a save).
         // recordBackup self-guards: media-only is a no-op.
@@ -226,10 +230,9 @@ export default function SettingsBackupScreen({ navigation }) {
         ) : null}
 
         <Text style={styles.intro}>
-          There are three kinds of backup. Each backup is one .zip file that
-          you can save where your share sheet permits. The app streams all
-          exports natively, so a large media library does not cause an
-          out-of-memory error.
+          {Platform.OS === 'web'
+            ? 'There are three kinds of backup. Each backup is one .zip file that the browser saves in your downloads. The browser builds the file in memory, so a very large media library can fail.'
+            : 'There are three kinds of backup. Each backup is one .zip file that you can save where your share sheet permits. The app streams all exports natively, so a large media library does not cause an out-of-memory error.'}
         </Text>
 
         <Text style={styles.sectionLabel}>Export</Text>

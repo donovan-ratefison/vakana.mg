@@ -23,6 +23,7 @@
 // (those didn't carry `manifest.mode`; restoreFromZip treats their
 // absence as 'full').
 
+import { Platform } from 'react-native';
 import { zip as nativeZip, unzip as nativeUnzip } from 'react-native-zip-archive';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
@@ -200,6 +201,15 @@ async function buildZipFromStaging(stagingUri, outName) {
   return outUri;
 }
 
+function archiveNameFor(vault, mode, stamp) {
+  const safeName = (vault.name || 'vault').replace(/[^a-zA-Z0-9_-]+/g, '_');
+  const modeTag =
+    mode === BACKUP_MODE_DATA_ONLY ? 'data' :
+    mode === BACKUP_MODE_MEDIA_ONLY ? 'media' :
+    'full';
+  return `journal-${safeName}-${modeTag}-${stamp}.zip`;
+}
+
 // Backbone of all three modes. Dispatcher lives in `exportCurrentVault`.
 async function exportWithMode(mode, { onProgress } = {}) {
   if (!VALID_MODES.has(mode)) {
@@ -221,6 +231,33 @@ async function exportWithMode(mode, { onProgress } = {}) {
   };
 
   const stamp = timestampStamp();
+
+  if (Platform.OS === 'web') {
+    // No file system on web: the archive is built in memory and the browser
+    // gets it as an object URL. A failure rejects before any URL exists.
+    const uri = await require('../web/backupArchive').createBackupUrl({
+      db,
+      manifest,
+      withDb: mode !== BACKUP_MODE_MEDIA_ONLY,
+      withMedia: mode !== BACKUP_MODE_DATA_ONLY,
+      names: {
+        manifest: MANIFEST_NAME,
+        db: DB_NAME_IN_ZIP,
+        photoDir: PHOTO_DIR,
+        voiceDir: VOICE_DIR,
+      },
+      extOf,
+      onProgress,
+    });
+    onProgress?.({ stage: 'done', uri });
+    return {
+      uri,
+      filename: archiveNameFor(vault, mode, stamp),
+      manifest,
+      vaultId: vault.id,
+    };
+  }
+
   const stagingUri = `${FileSystem.cacheDirectory}backup-staging-${stamp}/`;
   await safeDelete(stagingUri);
   await ensureDir(stagingUri);
@@ -238,12 +275,7 @@ async function exportWithMode(mode, { onProgress } = {}) {
     await writeManifestFile(stagingUri, manifest);
 
     onProgress?.({ stage: 'compressing' });
-    const safeName = (vault.name || 'vault').replace(/[^a-zA-Z0-9_-]+/g, '_');
-    const modeTag =
-      mode === BACKUP_MODE_DATA_ONLY ? 'data' :
-      mode === BACKUP_MODE_MEDIA_ONLY ? 'media' :
-      'full';
-    const outName = `journal-${safeName}-${modeTag}-${stamp}.zip`;
+    const outName = archiveNameFor(vault, mode, stamp);
     const outUri = await buildZipFromStaging(stagingUri, outName);
 
     onProgress?.({ stage: 'done', uri: outUri });
@@ -269,7 +301,12 @@ export async function exportCurrentVault({
 
 // ---- Share ---------------------------------------------------------------
 
-export async function shareBackup(uri) {
+// `filename` is used on web only: the browser saves the archive under it.
+export async function shareBackup(uri, filename) {
+  if (Platform.OS === 'web') {
+    require('../web/backupArchive').downloadBackup(uri, filename);
+    return;
+  }
   const available = await Sharing.isAvailableAsync();
   if (!available) {
     throw new Error('Sharing is not available on this device');
@@ -454,10 +491,15 @@ export async function restoreFromZip(zipUri, { onProgress } = {}) {
 export const BACKUP_STALE_DAYS = 30;
 
 const BACKUP_META_URI = `${FileSystem.documentDirectory}backup-meta.json`;
+// Web has no document directory: the same JSON goes to localStorage.
+const BACKUP_META_KEY = 'vakana_backup_meta';
 
 async function readBackupMeta() {
   try {
-    const raw = await FileSystem.readAsStringAsync(BACKUP_META_URI);
+    const raw =
+      Platform.OS === 'web'
+        ? localStorage.getItem(BACKUP_META_KEY)
+        : await FileSystem.readAsStringAsync(BACKUP_META_URI);
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object' && parsed.vaults) return parsed;
   } catch {
@@ -465,6 +507,13 @@ async function readBackupMeta() {
     // backup; unreadable/corrupt meta degrades to "never backed up".
   }
   return { version: 1, vaults: {} };
+}
+
+// Throws on failure: each caller logs with its own tag.
+async function writeBackupMeta(meta) {
+  const json = JSON.stringify(meta, null, 2);
+  if (Platform.OS === 'web') localStorage.setItem(BACKUP_META_KEY, json);
+  else await FileSystem.writeAsStringAsync(BACKUP_META_URI, json);
 }
 
 export async function getLastBackup(vaultId) {
@@ -488,10 +537,7 @@ export async function recordBackup(vaultId, mode) {
     mode,
   };
   try {
-    await FileSystem.writeAsStringAsync(
-      BACKUP_META_URI,
-      JSON.stringify(meta, null, 2)
-    );
+    await writeBackupMeta(meta);
   } catch (e) {
     warn('backup.recordBackup', e);
   }
@@ -519,10 +565,7 @@ export async function snoozeBackupNudge(vaultId, days = NUDGE_SNOOZE_DAYS) {
     ).toISOString(),
   };
   try {
-    await FileSystem.writeAsStringAsync(
-      BACKUP_META_URI,
-      JSON.stringify(meta, null, 2)
-    );
+    await writeBackupMeta(meta);
   } catch (e) {
     warn('backup.snoozeNudge', e);
   }
