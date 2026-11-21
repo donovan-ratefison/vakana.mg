@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../theme';
 
-// Web only: a full-screen notice shown in place of the app, with one action.
+// Web only: a full-screen notice shown in place of the app, with one optional action.
 export default function BootNotice({ message, detail, actionLabel, onAction }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -10,9 +10,11 @@ export default function BootNotice({ message, detail, actionLabel, onAction }) {
     <View style={styles.container}>
       <Text style={styles.message}>{message}</Text>
       {detail ? <Text style={styles.detail}>{detail}</Text> : null}
-      <Pressable style={styles.button} accessibilityRole="button" onPress={onAction}>
-        <Text style={styles.buttonLabel}>{actionLabel}</Text>
-      </Pressable>
+      {onAction ? (
+        <Pressable style={styles.button} accessibilityRole="button" onPress={onAction}>
+          <Text style={styles.buttonLabel}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

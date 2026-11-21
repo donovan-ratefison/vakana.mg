@@ -310,8 +310,8 @@ export function ThemeProvider({ children }) {
       // the browser follow the theme too.
       document.documentElement.style.backgroundColor = colors.background;
       document
-        .querySelector('meta[name="theme-color"]')
-        ?.setAttribute('content', colors.background);
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.setAttribute('content', colors.background));
     }
   }, [colors.background]);
 

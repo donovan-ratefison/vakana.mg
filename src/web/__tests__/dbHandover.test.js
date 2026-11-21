@@ -16,9 +16,13 @@ function fakeLocks() {
         }
         if (!held.has(name)) return grant(name, entry);
         queues.set(name, [...(queues.get(name) || []), entry]);
-        options.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        options.signal?.addEventListener('abort', () => {
+          queues.set(name, queues.get(name).filter((queued) => queued !== entry));
+          reject(new Error('aborted'));
+        });
       });
     },
+    queued: (name) => (queues.get(name) || []).length,
     // The page of the holder unloads.
     release(name) {
       held.delete(name);
@@ -83,6 +87,28 @@ describe('claimDatabase', () => {
     expect(ready).toBe(false);
 
     jest.advanceTimersByTime(1);
+    await flush();
+    expect(ready).toBe(true);
+  });
+
+  test('after the give-up, the second window still takes the handles lock when the first one unloads', async () => {
+    await openWindow().claimDatabase(() => {});
+    openWindow().claimDatabase(() => {});
+    jest.advanceTimersByTime(10000);
+    await flush();
+    expect(locks.queued('vakana-db-handles')).toBe(1);
+
+    // The first window unloads: the second one receives the lock and keeps it.
+    locks.release('vakana-db-handles');
+    expect(locks.queued('vakana-db-handles')).toBe(0);
+    let ready = false;
+    openWindow()
+      .claimDatabase(() => {})
+      .then(() => (ready = true));
+    await flush();
+    expect(ready).toBe(false);
+
+    locks.release('vakana-db-handles');
     await flush();
     expect(ready).toBe(true);
   });

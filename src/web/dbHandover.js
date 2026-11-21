@@ -31,13 +31,18 @@ export async function claimDatabase(onStolen) {
         resolve();
         return hold();
       })
-      .catch(resolve);
+      .catch(() => {
+        // Gave up the wait. Stay in the queue with no signal: this window
+        // gets the lock when the owner unloads, so the next window waits.
+        locks.request('vakana-db-handles', {}, hold).catch(() => {});
+        resolve();
+      });
   });
 }
 
 export function yieldToOtherWindow() {
   sessionStorage.setItem(FLAG, '1');
-  // shortcut: a fixed delay for the final save of the editor, replace it with an awaited save if a save can take longer.
+  // shortcut: a fixed delay for the final save of the editor (measured: a title typed 5 ms before the steal was saved 5 times out of 5), replace it with an awaited save if a save can take longer.
   setTimeout(() => location.reload(), 1000);
 }
 

@@ -103,20 +103,17 @@ function AppShell() {
         if (Platform.OS === 'web') {
           // The last window opened owns the database (src/web/dbHandover.js).
           const handover = require('./src/web/dbHandover');
-          const yielded = {
-            message: 'Vakana is open in another window.',
-            actionLabel: 'Use here',
-            onAction: handover.useHere,
-          };
+          const message = 'Vakana is open in another window.';
           if (handover.isYielded()) {
-            setBootNotice(yielded);
+            setBootNotice({ message, actionLabel: 'Use here', onAction: handover.useHere });
             return;
           }
           // The notice unmounts the navigator, so the editor runs its final
-          // save before this window reloads. The await ends when the window
-          // that owned the database has unloaded.
+          // save before this window reloads. No button until the reload: a
+          // click would cut that save. The await ends when the window that
+          // owned the database has unloaded.
           await handover.claimDatabase(() => {
-            setBootNotice(yielded);
+            setBootNotice({ message });
             handover.yieldToOtherWindow();
           });
         }
@@ -164,9 +161,13 @@ function AppShell() {
         console.error('Database init error:', e?.message || e, e);
         // Never the lock screen or the list over a database that is absent.
         if (Platform.OS === 'web') {
+          const detail = e?.message || String(e);
           setBootNotice({
             message: 'Vakana could not open the journal.',
-            detail: e?.message || String(e),
+            // The database files are still held by another window.
+            detail: detail.includes('createSyncAccessHandle')
+              ? 'Close the other Vakana window, then retry.'
+              : detail,
             actionLabel: 'Retry',
             onAction: () => location.reload(),
           });
