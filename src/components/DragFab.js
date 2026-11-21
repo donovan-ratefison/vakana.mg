@@ -253,7 +253,8 @@ const makeStyles = (colors) =>
     },
     hint: {
       position: 'absolute',
-      bottom: 100,
+      // Above the two targets: the higher one ends 194 from the bottom.
+      bottom: 210,
       alignSelf: 'center',
       color: '#fff',
       fontSize: 13,

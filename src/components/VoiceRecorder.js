@@ -159,6 +159,13 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
     }
   }, [playingUrl]);
 
+  // On web, expo-audio does not release the player of an unmounted component,
+  // and the sound goes on. On native, it releases the player.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return undefined;
+    return () => playerRef.current?.pause();
+  }, []);
+
   useEffect(() => {
     if (playerStatus?.didJustFinish) {
       setPlayingIndex(null);
@@ -235,6 +242,9 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
     if (playingIndex === index) {
       player.pause();
       setPlayingIndex(null);
+    } else if (playingIndex !== null && index < playingIndex) {
+      // The note in playback moves up one row: its index follows it.
+      setPlayingIndex(playingIndex - 1);
     }
     onRecordingsChange(recordings.filter((_, i) => i !== index));
   };
