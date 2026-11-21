@@ -1,5 +1,5 @@
 // Web replacement for react-native-zip-archive (wired in metro.config.js).
-// shortcut: restore rejects on web; replace with a jszip path when web restore is in scope.
+// These 2 functions are not called on web any more: backup and restore use src/web/backupArchive.js.
 const unavailable = async () => {
   throw new Error('Not available on web');
 };

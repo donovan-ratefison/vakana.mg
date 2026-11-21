@@ -40,25 +40,29 @@ async function openDir(path, create) {
   return dir;
 }
 
+// Write a Blob into the store of the current vault, under a new name, and
+// return its reference. `ext` is '' or starts with a dot.
+export async function writeMediaBlob(blob, kind, ext = mediaExtension(blob.type)) {
+  if (!KIND_DIRS[kind]) throw new Error(`unknown media kind: ${kind}`);
+  const path = `attachments/${await getCurrentVaultId()}/${KIND_DIRS[kind]}`;
+  const name = `${kind[0]}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
+  const dir = await openDir(path, true);
+  const handle = await dir.getFileHandle(name, { create: true });
+  const writable = await handle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+  return `${PREFIX}${path}/${name}`;
+}
+
 // Copy a picked or captured file into OPFS and return its reference. A
 // failure throws: a `blob:` URL in the database would be a silent loss.
 export async function persistMediaUri(uri, kind) {
   if (!uri || uri.startsWith(PREFIX)) return uri;
   try {
-    if (!KIND_DIRS[kind]) throw new Error(`unknown media kind: ${kind}`);
-    const path = `attachments/${await getCurrentVaultId()}/${KIND_DIRS[kind]}`;
-    const blob = await (await fetch(uri)).blob();
-    const name = `${kind[0]}_${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2, 8)}${mediaExtension(blob.type)}`;
-    const dir = await openDir(path, true);
-    const handle = await dir.getFileHandle(name, { create: true });
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
+    const ref = await writeMediaBlob(await (await fetch(uri)).blob(), kind);
     // The bytes are in OPFS: the URL of the picker is of no more use.
     if (uri.startsWith('blob:')) URL.revokeObjectURL(uri);
-    return `${PREFIX}${path}/${name}`;
+    return ref;
   } catch (e) {
     warn('mediaStore.persist', e);
     throw new Error(

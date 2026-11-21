@@ -332,6 +332,50 @@ export async function pickBackupFile() {
   return asset;
 }
 
+// Common end of a restore, native and web. The restored database is closed
+// when this starts: reopen it, point the media rows at the restored files,
+// clear the stale notification ids, and close it for the AppShell re-init.
+async function finishRestore(
+  { mode, manifest, photoIdToUri, voiceIdToUri },
+  onProgress
+) {
+  onProgress?.({ stage: 'rewriting-uris' });
+  await initDatabase();
+  const db = getDb();
+  if (db) {
+    for (const [id, uri] of photoIdToUri.entries()) {
+      await db.runAsync(
+        'UPDATE entry_photos SET uri = ? WHERE id = ?',
+        [uri, id]
+      );
+    }
+    for (const [id, uri] of voiceIdToUri.entries()) {
+      await db.runAsync(
+        'UPDATE entry_voice_notes SET uri = ? WHERE id = ?',
+        [uri, id]
+      );
+    }
+    // Stale notification_ids: every series will be rehydrated when the
+    // user unlocks the vault again, so just clear them now.
+    await db.runAsync(
+      `UPDATE scheduled_prompts SET notification_id = NULL WHERE notification_id IS NOT NULL`
+    );
+    await db.runAsync(
+      `UPDATE comments SET notification_id = NULL WHERE notification_id IS NOT NULL`
+    );
+  }
+  // Close again so the AppShell re-init runs against the restored file.
+  await closeDatabase();
+
+  onProgress?.({ stage: 'done' });
+  return {
+    mode,
+    photosRestored: photoIdToUri.size,
+    voiceRestored: voiceIdToUri.size,
+    skipped: manifest.skipped?.length || 0,
+  };
+}
+
 // Restore. Native unzip into a temp dir, walk by manifest, native
 // copyAsync into place. Memory-flat. Compatible with v0.13.x backups
 // (those omit `manifest.mode`; we infer 'full').
@@ -340,6 +384,24 @@ export async function restoreFromZip(zipUri, { onProgress } = {}) {
   if (!vault) throw new Error('No active vault');
 
   onProgress?.({ stage: 'reading-zip' });
+
+  if (Platform.OS === 'web') {
+    // No file system on web: the archive is read in memory and the database
+    // is replaced in one step, then closed. A failure rejects before that.
+    const restored = await require('../web/backupArchive').restoreArchive({
+      zipUri,
+      names: {
+        manifest: MANIFEST_NAME,
+        db: DB_NAME_IN_ZIP,
+        photoDir: PHOTO_DIR,
+        voiceDir: VOICE_DIR,
+      },
+      modes: { fallback: BACKUP_MODE_FULL, refused: BACKUP_MODE_MEDIA_ONLY },
+      onProgress,
+      // The file picker made this object URL: release the file that it holds.
+    }).finally(() => URL.revokeObjectURL(zipUri));
+    return finishRestore(restored, onProgress);
+  }
 
   const stamp = timestampStamp();
   const extractDir = `${FileSystem.cacheDirectory}restore-staging-${stamp}/`;
@@ -433,41 +495,7 @@ export async function restoreFromZip(zipUri, { onProgress } = {}) {
       voiceIdToUri.set(item.id, dest);
     }
 
-    onProgress?.({ stage: 'rewriting-uris' });
-    await initDatabase();
-    const db = getDb();
-    if (db) {
-      for (const [id, uri] of photoIdToUri.entries()) {
-        await db.runAsync(
-          'UPDATE entry_photos SET uri = ? WHERE id = ?',
-          [uri, id]
-        );
-      }
-      for (const [id, uri] of voiceIdToUri.entries()) {
-        await db.runAsync(
-          'UPDATE entry_voice_notes SET uri = ? WHERE id = ?',
-          [uri, id]
-        );
-      }
-      // Stale notification_ids: every series will be rehydrated when the
-      // user unlocks the vault again, so just clear them now.
-      await db.runAsync(
-        `UPDATE scheduled_prompts SET notification_id = NULL WHERE notification_id IS NOT NULL`
-      );
-      await db.runAsync(
-        `UPDATE comments SET notification_id = NULL WHERE notification_id IS NOT NULL`
-      );
-    }
-    // Close again so the AppShell re-init runs against the restored file.
-    await closeDatabase();
-
-    onProgress?.({ stage: 'done' });
-    return {
-      mode,
-      photosRestored: photoIdToUri.size,
-      voiceRestored: voiceIdToUri.size,
-      skipped: manifest.skipped?.length || 0,
-    };
+    return await finishRestore({ mode, manifest, photoIdToUri, voiceIdToUri }, onProgress);
   } finally {
     safeDelete(extractDir);
   }
