@@ -9,12 +9,12 @@ import {
   Alert,
   Modal,
   Pressable,
-  Image,
   Animated,
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BeadView from '../components/BeadView';
+import MediaImage from '../components/MediaImage';
 import BeadChain from '../components/BeadChain';
 import VerticalBeadChain from '../components/VerticalBeadChain';
 import LoopBeadChain from '../components/LoopBeadChain';
@@ -2253,9 +2253,9 @@ function EntryPreviewDrawer({ entryId, onClose, onOpen }) {
                   contentContainerStyle={styles.photoStrip}
                 >
                   {photos.map((p, i) => (
-                    <Image
+                    <MediaImage
                       key={i}
-                      source={{ uri: p.uri }}
+                      uri={p.uri}
                       style={styles.photoThumb}
                     />
                   ))}

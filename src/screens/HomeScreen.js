@@ -1278,7 +1278,16 @@ export default function HomeScreen({ navigation, route }) {
     if (!db) return;
     // Camera/recorder URIs live in the OS-cleanable cache. Copy them into the
     // vault's attachment store before they hit the DB.
-    if (photoUri) photoUri = await persistMediaUri(photoUri, 'photo');
+    if (photoUri) {
+      try {
+        photoUri = await persistMediaUri(photoUri, 'photo');
+      } catch (e) {
+        // Only the web store throws: a photo it cannot keep must not make an entry.
+        if (Platform.OS !== 'web') throw e;
+        Alert.alert('Photo not saved', e.message);
+        return;
+      }
+    }
     if (voiceNote) {
       voiceNote = {
         ...voiceNote,
@@ -1319,10 +1328,13 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const handleQuickPhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Quick photo needs the camera permission.');
-      return;
+    // On web the camera opens through a file input: no permission to ask.
+    if (Platform.OS !== 'web') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Quick photo needs the camera permission.');
+        return;
+      }
     }
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
@@ -2994,7 +3006,8 @@ export default function HomeScreen({ navigation, route }) {
         <DragFab
           onPress={() => navigation.navigate('EntryEditor', { entryId: null })}
           onCamera={handleQuickPhoto}
-          onMic={() => setVoiceVisible(true)}
+          // Web: the player cannot read a stored voice note yet, so no Voice target.
+          onMic={Platform.OS === 'web' ? undefined : () => setVoiceVisible(true)}
         />
       )}
 

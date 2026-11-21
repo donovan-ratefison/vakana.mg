@@ -9,11 +9,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Image,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BeadView from './BeadView';
+import MediaImage from './MediaImage';
 import BeadComposer from './BeadComposer';
 import {
   loadFusePreview,
@@ -187,7 +187,7 @@ export default function FuseSheet({
                     contentContainerStyle={styles.photoStrip}
                   >
                     {preview.photos.map((uri, i) => (
-                      <Image key={i} source={{ uri }} style={styles.photoThumb} />
+                      <MediaImage key={i} uri={uri} style={styles.photoThumb} />
                     ))}
                   </ScrollView>
                 </>

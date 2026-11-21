@@ -40,11 +40,11 @@ const TARGETS = [
   },
 ];
 
-function getActiveTarget(dx, dy) {
+function getActiveTarget(dx, dy, targets) {
   const dist = Math.hypot(dx, dy);
   if (dist < MIN_DRAG_DISTANCE) return null;
   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-  for (const t of TARGETS) {
+  for (const t of targets) {
     if (angle >= t.angleMin && angle <= t.angleMax) return t.id;
   }
   return null;
@@ -57,6 +57,12 @@ export default function DragFab({ onPress, onCamera, onMic }) {
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const [dragMode, setDragMode] = useState(false);
   const [activeTarget, setActiveTarget] = useState(null);
+
+  // A target with no handler is not drawn and the drag cannot select it.
+  const targets = useMemo(
+    () => TARGETS.filter((t) => (t.id === 'camera' ? onCamera : onMic)),
+    [onCamera, onMic]
+  );
 
   const dragModeRef = useRef(false);
   const tapTimer = useRef(null);
@@ -96,7 +102,7 @@ export default function DragFab({ onPress, onCamera, onMic }) {
         onPanResponderMove: (_, g) => {
           if (dragModeRef.current) {
             pan.setValue({ x: g.dx, y: g.dy });
-            const next = getActiveTarget(g.dx, g.dy);
+            const next = getActiveTarget(g.dx, g.dy, targets);
             setActiveTarget((cur) => (cur === next ? cur : next));
           } else if (Math.hypot(g.dx, g.dy) > TAP_MOVE_THRESHOLD) {
             // moved before long-press fired: cancel tap and don't enter drag mode
@@ -107,7 +113,7 @@ export default function DragFab({ onPress, onCamera, onMic }) {
         onPanResponderRelease: (_, g) => {
           clearTimeout(tapTimer.current);
           if (dragModeRef.current) {
-            const target = getActiveTarget(g.dx, g.dy);
+            const target = getActiveTarget(g.dx, g.dy, targets);
             exitDragMode();
             if (target === 'camera') onCamera?.();
             else if (target === 'mic') onMic?.();
@@ -122,14 +128,14 @@ export default function DragFab({ onPress, onCamera, onMic }) {
           if (dragModeRef.current) exitDragMode();
         },
       }),
-    [onPress, onCamera, onMic]
+    [onPress, onCamera, onMic, targets]
   );
 
   return (
     <>
       {dragMode && (
         <View style={styles.backdrop} pointerEvents="none">
-          {TARGETS.map((t) => {
+          {targets.map((t) => {
             const right = 20 - t.dx;
             const bottom = 20 - t.dy;
             const isActive = activeTarget === t.id;

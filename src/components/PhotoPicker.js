@@ -4,13 +4,14 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Image,
   Alert,
   Modal,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import PhotoViewer from './PhotoViewer';
+import MediaImage from './MediaImage';
 import { persistMediaUris } from '../services/mediaStore';
 import { useTheme } from '../theme';
 
@@ -70,7 +71,8 @@ function PhotoPicker({ photos, onPhotosChange, onAddPhotos, hideWhenEmpty = fals
 
   const takePhoto = async () => {
     if (busy) return;
-    if (!(await requestCameraPermission())) return;
+    // On web the camera opens through a file input: no permission to ask.
+    if (Platform.OS !== 'web' && !(await requestCameraPermission())) return;
     setBusyLabel('Capturing photo…');
     setBusy(true);
     try {
@@ -165,7 +167,7 @@ function PhotoPicker({ photos, onPhotosChange, onAddPhotos, hideWhenEmpty = fals
             onLongPress={() => removePhoto(index)}
             delayLongPress={400}
           >
-            <Image source={{ uri }} style={styles.photo} />
+            <MediaImage uri={uri} style={styles.photo} />
           </TouchableOpacity>
         ))}
       </View>

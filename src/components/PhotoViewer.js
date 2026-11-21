@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Image,
   Modal,
   Dimensions,
   FlatList,
@@ -12,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MediaImage from './MediaImage';
 
 export default function PhotoViewer({ photos, initialIndex, visible, onClose }) {
   const listRef = useRef(null);
@@ -67,7 +67,7 @@ export default function PhotoViewer({ photos, initialIndex, visible, onClose }) 
             <View
               style={{ width, height, justifyContent: 'center', alignItems: 'center' }}
             >
-              <Image source={{ uri: item }} style={{ width, height }} resizeMode="contain" />
+              <MediaImage uri={item} style={{ width, height }} resizeMode="contain" />
             </View>
           )}
         />
