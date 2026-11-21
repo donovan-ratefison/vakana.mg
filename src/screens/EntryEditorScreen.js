@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Platform,
   ActivityIndicator,
   Modal,
   Pressable,
@@ -2178,46 +2177,41 @@ export default function EntryEditorScreen({ route, navigation }) {
                 <Text style={styles.threadsRowText}>Pick from library</Text>
                 <View style={{ width: 16 }} />
               </TouchableOpacity>
-              {/* Web: the player cannot read a stored voice note yet, so no way to add one. */}
-              {Platform.OS !== 'web' && (
-                <>
-                  <TouchableOpacity
-                    style={styles.threadsRow}
-                    onPress={() =>
-                      closeAttachThen(() =>
-                        voiceRecorderRef.current?.startRecording()
-                      )
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="mic-outline" size={18} color={colors.primary} />
-                    <Text style={styles.threadsRowText}>Voice note</Text>
-                    <View style={{ width: 16 }} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.threadsRow}
-                    onPress={() =>
-                      closeAttachThen(() =>
-                        voiceRecorderRef.current?.importAudio()
-                      )
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name="musical-notes-outline"
-                      size={18}
-                      color={colors.primary}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.threadsRowText, { flex: undefined }]}>
-                        Pick audio file
-                      </Text>
-                      <Text style={styles.threadsRowSubtext}>Up to 50 MB</Text>
-                    </View>
-                    <View style={{ width: 16 }} />
-                  </TouchableOpacity>
-                </>
-              )}
+              <TouchableOpacity
+                style={styles.threadsRow}
+                onPress={() =>
+                  closeAttachThen(() =>
+                    voiceRecorderRef.current?.startRecording()
+                  )
+                }
+                activeOpacity={0.7}
+              >
+                <Ionicons name="mic-outline" size={18} color={colors.primary} />
+                <Text style={styles.threadsRowText}>Voice note</Text>
+                <View style={{ width: 16 }} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.threadsRow}
+                onPress={() =>
+                  closeAttachThen(() =>
+                    voiceRecorderRef.current?.importAudio()
+                  )
+                }
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="musical-notes-outline"
+                  size={18}
+                  color={colors.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.threadsRowText, { flex: undefined }]}>
+                    Pick audio file
+                  </Text>
+                  <Text style={styles.threadsRowSubtext}>Up to 50 MB</Text>
+                </View>
+                <View style={{ width: 16 }} />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.threadsRow, styles.threadsRowLast]}
                 onPress={() =>

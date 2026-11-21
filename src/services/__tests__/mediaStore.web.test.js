@@ -1,4 +1,4 @@
-import { rescueAndSweepMedia } from '../mediaStore.web';
+import { mediaExtension, openMediaFile, rescueAndSweepMedia } from '../mediaStore.web';
 import { getDb } from '../../database/db';
 
 jest.mock('../../database/db', () => ({ getDb: jest.fn() }));
@@ -56,5 +56,41 @@ describe('rescueAndSweepMedia on web', () => {
     await rescueAndSweepMedia();
 
     expect([...files.keys()]).toEqual(['referenced_25h.png', 'orphan_1h.png']);
+  });
+});
+
+describe('openMediaFile on web', () => {
+  it('refuses a path outside attachments/ and does not touch the storage', async () => {
+    const getDirectory = jest.fn();
+    Object.defineProperty(global, 'navigator', {
+      value: { storage: { getDirectory } },
+      configurable: true,
+    });
+
+    expect(await openMediaFile('opfs:expo-sqlite/x')).toBeNull();
+    expect(getDirectory).not.toHaveBeenCalled();
+  });
+
+  it('returns the file of a reference into attachments/', async () => {
+    const tree = new Map([[PHOTOS, new Map([['a.png', 42]])]]);
+    Object.defineProperty(global, 'navigator', {
+      value: { storage: { getDirectory: async () => fakeDir(tree, '') } },
+      configurable: true,
+    });
+
+    expect(await openMediaFile(`opfs:${PHOTOS}/a.png`)).toEqual({ lastModified: 42 });
+  });
+});
+
+describe('mediaExtension', () => {
+  it('reads the type before the parameters, in any case', () => {
+    expect(mediaExtension('audio/webm;codecs=opus')).toBe('.webm');
+    expect(mediaExtension('Audio/WAV')).toBe('.wav');
+    expect(mediaExtension('image/png')).toBe('.png');
+  });
+
+  it('gives no extension for an unknown or empty type', () => {
+    expect(mediaExtension('application/octet-stream')).toBe('');
+    expect(mediaExtension('')).toBe('');
   });
 });

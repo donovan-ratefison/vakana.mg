@@ -17,7 +17,20 @@ const EXTENSIONS = {
   'image/png': '.png',
   'image/webp': '.webp',
   'image/gif': '.gif',
+  'audio/webm': '.webm',
+  'audio/mp4': '.m4a',
+  'audio/x-m4a': '.m4a',
+  'audio/mpeg': '.mp3',
+  'audio/ogg': '.ogg',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
 };
+
+// The file extension for a MIME type, or '' for an unknown type. The
+// recorder gives a type with parameters (`audio/webm;codecs=opus`).
+export function mediaExtension(type) {
+  return EXTENSIONS[(type || '').split(';')[0].trim().toLowerCase()] || '';
+}
 
 async function openDir(path, create) {
   let dir = await navigator.storage.getDirectory();
@@ -37,7 +50,7 @@ export async function persistMediaUri(uri, kind) {
     const blob = await (await fetch(uri)).blob();
     const name = `${kind[0]}_${Date.now()}_${Math.random()
       .toString(36)
-      .slice(2, 8)}${EXTENSIONS[blob.type] || ''}`;
+      .slice(2, 8)}${mediaExtension(blob.type)}`;
     const dir = await openDir(path, true);
     const handle = await dir.getFileHandle(name, { create: true });
     const writable = await handle.createWritable();
@@ -48,7 +61,9 @@ export async function persistMediaUri(uri, kind) {
     return `${PREFIX}${path}/${name}`;
   } catch (e) {
     warn('mediaStore.persist', e);
-    throw new Error('The photo could not be saved in this browser.');
+    throw new Error(
+      `The ${kind === 'voice' ? 'voice note' : 'photo'} could not be saved in this browser.`
+    );
   }
 }
 
@@ -60,10 +75,12 @@ export async function persistMediaUris(uris, kind) {
   return out;
 }
 
-// The File behind a reference, or null (not an OPFS reference, file missing).
+// The File behind a reference, or null (not a reference into `attachments/`,
+// file missing). A reference comes from the database: it must not open
+// another part of OPFS, such as the files of SQLite.
 export async function openMediaFile(ref) {
   try {
-    if (!ref.startsWith(PREFIX)) return null;
+    if (!ref.startsWith(`${PREFIX}attachments/`)) return null;
     const path = ref.slice(PREFIX.length);
     const cut = path.lastIndexOf('/');
     const dir = await openDir(path.slice(0, cut), false);

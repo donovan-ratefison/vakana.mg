@@ -1289,10 +1289,17 @@ export default function HomeScreen({ navigation, route }) {
       }
     }
     if (voiceNote) {
-      voiceNote = {
-        ...voiceNote,
-        uri: await persistMediaUri(voiceNote.uri, 'voice'),
-      };
+      try {
+        voiceNote = {
+          ...voiceNote,
+          uri: await persistMediaUri(voiceNote.uri, 'voice'),
+        };
+      } catch (e) {
+        // Only the web store throws: a note it cannot keep must not make an entry.
+        if (Platform.OS !== 'web') throw e;
+        Alert.alert('Voice note not saved', e.message);
+        return;
+      }
     }
     const now = new Date();
     const dateStr = formatDateStr(now);
@@ -3006,8 +3013,7 @@ export default function HomeScreen({ navigation, route }) {
         <DragFab
           onPress={() => navigation.navigate('EntryEditor', { entryId: null })}
           onCamera={handleQuickPhoto}
-          // Web: the player cannot read a stored voice note yet, so no Voice target.
-          onMic={Platform.OS === 'web' ? undefined : () => setVoiceVisible(true)}
+          onMic={() => setVoiceVisible(true)}
         />
       )}
 

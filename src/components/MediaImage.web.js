@@ -1,31 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Image } from 'react-native';
-import { openMediaFile } from '../services/mediaStore.web';
+import useMediaUrl from '../hooks/useMediaUrl';
 
-// An entry photo from its stored reference. An `opfs:` reference is read
-// from the media store and shown through an object URL, which is revoked on
-// unmount and when `uri` changes. A missing file renders an empty image.
+// An entry photo from its stored reference. An `opfs:` reference is shown
+// through the object URL of useMediaUrl. Until that URL is ready, and when
+// the file is missing, the image is empty.
 export default function MediaImage({ uri, ...rest }) {
-  const stored = !!uri && uri.startsWith('opfs:');
-  const [url, setUrl] = useState(null);
-
-  useEffect(() => {
-    if (!stored) return undefined;
-    let live = true;
-    let created = null;
-    openMediaFile(uri).then((file) => {
-      // A late answer after unmount must not create a URL nobody revokes.
-      if (!live || !file) return;
-      created = URL.createObjectURL(file);
-      setUrl(created);
-    });
-    return () => {
-      live = false;
-      if (created) URL.revokeObjectURL(created);
-      setUrl(null);
-    };
-  }, [uri, stored]);
-
-  const source = stored ? (url ? { uri: url } : undefined) : { uri };
-  return <Image {...rest} source={source} />;
+  const url = useMediaUrl(uri);
+  return <Image {...rest} source={url ? { uri: url } : undefined} />;
 }

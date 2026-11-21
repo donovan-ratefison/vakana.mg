@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, PanResponder } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, PanResponder, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   useAudioRecorder,
@@ -14,6 +14,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { persistMediaUri } from '../services/mediaStore';
+import useMediaUrl from '../hooks/useMediaUrl';
 import { useTheme } from '../theme';
 
 const RECORDING_OPTIONS = RecordingPresets.HIGH_QUALITY;
@@ -46,6 +47,18 @@ async function readAudioDuration(uri) {
   }
 }
 
+// Copies a take or a picked file into the attachment store. Only the web
+// store throws: there, a note it cannot keep is reported and dropped (null).
+async function persistVoice(uri) {
+  try {
+    return await persistMediaUri(uri, 'voice');
+  } catch (e) {
+    if (Platform.OS !== 'web') throw e;
+    Alert.alert('Voice note not saved', e.message);
+    return null;
+  }
+}
+
 function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }, ref) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -55,7 +68,10 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
 
   const [playingIndex, setPlayingIndex] = useState(null);
   const playingUri = playingIndex !== null ? recordings[playingIndex]?.uri : null;
-  const player = useAudioPlayer(playingUri ? { uri: playingUri } : null);
+  // On web a stored note is an `opfs:` reference: the player gets an object
+  // URL, and null until that URL is ready. On native this is playingUri.
+  const playingUrl = useMediaUrl(playingUri);
+  const player = useAudioPlayer(playingUrl ? { uri: playingUrl } : null);
   const playerStatus = useAudioPlayerStatus(player);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -135,11 +151,11 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
   }, [recorderState.isRecording]);
 
   useEffect(() => {
-    if (playingUri && player) {
+    if (playingUrl && player) {
       player.seekTo(0);
       player.play();
     }
-  }, [playingUri]);
+  }, [playingUrl]);
 
   useEffect(() => {
     if (playerStatus?.didJustFinish) {
@@ -176,7 +192,8 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
       if (uri) {
         // The recorder writes into the OS-cleanable cache. Move the take
         // into the vault's attachment store before it enters state.
-        const stored = await persistMediaUri(uri, 'voice');
+        const stored = await persistVoice(uri);
+        if (!stored) return;
         onRecordingsChange([
           ...recordings,
           { uri: stored, duration: Math.round(durationMillis / 1000) },
@@ -243,7 +260,8 @@ function VoiceRecorder({ recordings, onRecordingsChange, hideWhenEmpty = false }
       const duration = await readAudioDuration(asset.uri);
       // copyToCacheDirectory lands the pick in the cache. Store a
       // durable copy, same as a fresh recording.
-      const stored = await persistMediaUri(asset.uri, 'voice');
+      const stored = await persistVoice(asset.uri);
+      if (!stored) return;
       onRecordingsChange([
         ...recordings,
         { uri: stored, duration },
