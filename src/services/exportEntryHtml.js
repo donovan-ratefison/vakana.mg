@@ -9,8 +9,7 @@
 // section title in stylistically distinct slots (post-author byline,
 // polaroid caption) so the duplication reads as deliberate styling.
 
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
+import { writeExportFile, shareExportFile } from './exportFile';
 import { getDb } from '../database/db';
 import { PARENT_ENTRY } from './comments';
 import {
@@ -113,17 +112,12 @@ export async function exportEntryAsHtml(entryId, template) {
   const slug = slugify(entry.title) || `entry-${entryId}`;
   const date = entry.date || 'undated';
   const filename = `${slug}-${date}.html`;
-  const targetUri = `${FileSystem.cacheDirectory}${filename}`;
+  const mimeType = 'text/html';
+  const targetUri = await writeExportFile(filename, html, { encoding: 'utf8', mimeType });
 
-  await FileSystem.writeAsStringAsync(targetUri, html, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-
-  const available = await Sharing.isAvailableAsync();
-  if (!available) throw new Error('Sharing is not available on this device');
-
-  await Sharing.shareAsync(targetUri, {
-    mimeType: 'text/html',
+  await shareExportFile(targetUri, {
+    filename,
+    mimeType,
     dialogTitle: 'Share entry as HTML',
     UTI: 'public.html',
   });

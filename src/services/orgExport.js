@@ -2,10 +2,9 @@
 // Build contract: docs/architecture/org-export.md. One-way only; no
 // transport, no sync, no import-back (spec §1 non-goals).
 
-import { Platform } from 'react-native';
+import { writeExportFile, shareExportFile, saveExportFileToDevice } from './exportFile';
 import JSZip from 'jszip';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { getDb } from '../database/db';
 import { placeholderBeadForDate } from './autoThread';
@@ -923,14 +922,12 @@ async function addBeadAssets(assets, beads, opts) {
 // save-to-device paths both start from this artifact).
 async function writeZipToCache(zip, filename, missing) {
   const zb64 = await zip.generateAsync({ type: 'base64' });
-  const uri = `${FileSystem.cacheDirectory}${filename}`;
-  await FileSystem.writeAsStringAsync(uri, zb64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  const mimeType = 'application/zip';
+  const uri = await writeExportFile(filename, zb64, { encoding: 'base64', mimeType });
   return {
     uri,
     filename,
-    mimeType: 'application/zip',
+    mimeType,
     UTI: 'public.zip-archive',
     missing,
   };
@@ -966,10 +963,8 @@ async function buildThreadOrgZip(threadId, options = {}) {
  */
 export async function exportThreadOrg(threadId, options = {}) {
   const a = await buildThreadOrgZip(threadId, options);
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('Sharing is not available on this device');
-  }
-  await Sharing.shareAsync(a.uri, {
+  await shareExportFile(a.uri, {
+    filename: a.filename,
     mimeType: a.mimeType,
     dialogTitle: 'Export thread to Org',
     UTI: a.UTI,
@@ -999,10 +994,8 @@ export async function exportEntryOrg(entryId, options = {}) {
   const missing = await addBeadAssets(assets, [data.bead], opts);
 
   const a = await writeZipToCache(zip, `${base}.zip`, missing);
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('Sharing is not available on this device');
-  }
-  await Sharing.shareAsync(a.uri, {
+  await shareExportFile(a.uri, {
+    filename: a.filename,
     mimeType: a.mimeType,
     dialogTitle: 'Export entry to Org',
     UTI: a.UTI,
@@ -1013,38 +1006,14 @@ export async function exportEntryOrg(entryId, options = {}) {
 /**
  * Build and **save to device**. Android: pick a folder via SAF and copy
  * the zip there (no share sheet). iOS: SAF doesn't exist, so route
- * through the share sheet ("Save to Files"). Mirrors
- * threadArticles.persistArtifactToDevice. Still local, no transport.
+ * through the share sheet ("Save to Files"). Web: a download. See
+ * exportFile.saveExportFileToDevice. Still local, no transport.
  * @returns {Promise<{ uri, filename, missing:string[] }>}
  */
 export async function saveThreadOrgToDevice(threadId, options = {}) {
   const a = await buildThreadOrgZip(threadId, options);
-  if (Platform.OS === 'android') {
-    const perms =
-      await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-    if (!perms.granted) throw new Error('Folder permission was denied');
-    const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-      perms.directoryUri,
-      a.filename,
-      a.mimeType
-    );
-    const b64 = await FileSystem.readAsStringAsync(a.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    await FileSystem.writeAsStringAsync(fileUri, b64, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return { uri: fileUri, filename: a.filename, missing: a.missing };
-  }
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('Sharing is not available on this device');
-  }
-  await Sharing.shareAsync(a.uri, {
-    mimeType: a.mimeType,
-    dialogTitle: 'Save thread Org export',
-    UTI: a.UTI,
-  });
-  return { uri: a.uri, filename: a.filename, missing: a.missing };
+  const uri = await saveExportFileToDevice(a, 'Save thread Org export');
+  return { uri, filename: a.filename, missing: a.missing };
 }
 
 // Re-export the SVG helpers so the export surface is one module.

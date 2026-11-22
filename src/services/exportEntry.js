@@ -7,8 +7,7 @@
 // at the bottom so the writer remembers what was attached. Users who
 // need full fidelity export the vault backup.
 
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
+import { writeExportFile, shareExportFile } from './exportFile';
 import { getDb } from '../database/db';
 
 function slugify(text) {
@@ -114,18 +113,12 @@ export async function exportEntryAsMarkdown(entryId) {
   const slug = slugify(entry.title) || `entry-${entryId}`;
   const date = entry.date || 'undated';
   const filename = `${slug}-${date}.md`;
-  const targetUri = `${FileSystem.cacheDirectory}${filename}`;
+  const mimeType = 'text/markdown';
+  const targetUri = await writeExportFile(filename, md, { encoding: 'utf8', mimeType });
 
-  await FileSystem.writeAsStringAsync(targetUri, md, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-
-  const available = await Sharing.isAvailableAsync();
-  if (!available) {
-    throw new Error('Sharing is not available on this device');
-  }
-  await Sharing.shareAsync(targetUri, {
-    mimeType: 'text/markdown',
+  await shareExportFile(targetUri, {
+    filename,
+    mimeType,
     dialogTitle: 'Share entry as Markdown',
     UTI: 'net.daringfireball.markdown',
   });

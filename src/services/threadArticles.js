@@ -10,16 +10,15 @@
 // Everything funnels through the share sheet via expo-sharing.
 
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { Platform } from 'react-native';
 import MarkdownIt from 'markdown-it';
 import JSZip from 'jszip';
 import { getDb } from '../database/db';
 import { chainSvgString } from '../beads/svgExport';
 import { PARENT_ENTRY, PARENT_THREAD } from './comments';
 import { formatTimeLabel } from '../utils/dateString';
+import { writeExportFile, shareExportFile, saveExportFileToDevice } from './exportFile';
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
@@ -1413,14 +1412,6 @@ export async function buildPhotoBase64Map(data, kind = 'html') {
 // Top-level export-and-share entry points
 // ---------------------------------------------------------------------------
 
-async function shareFile(uri, mimeType, dialogTitle, UTI) {
-  const available = await Sharing.isAvailableAsync();
-  if (!available) {
-    throw new Error('Sharing is not available on this device');
-  }
-  await Sharing.shareAsync(uri, { mimeType, dialogTitle, UTI });
-}
-
 function articleFilename(article, thread, ext) {
   const base =
     slugify(article.title) || slugify(thread.name) || `thread-${thread.id}`;
@@ -1440,11 +1431,9 @@ async function buildArticleArtifact(threadId, kind) {
     const photosBase64 = await buildPhotoBase64Map(data, 'html');
     const html = renderHtml({ ...data, photosBase64 });
     const filename = articleFilename(data.article, data.thread, 'html');
-    const uri = `${FileSystem.cacheDirectory}${filename}`;
-    await FileSystem.writeAsStringAsync(uri, html, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
-    return { uri, filename, mimeType: 'text/html', UTI: 'public.html' };
+    const mimeType = 'text/html';
+    const uri = await writeExportFile(filename, html, { encoding: 'utf8', mimeType });
+    return { uri, filename, mimeType, UTI: 'public.html' };
   }
 
   if (kind === 'pdf') {
@@ -1532,48 +1521,15 @@ async function buildThreadMarkdownZip(threadId, { multiFile = false } = {}) {
 
   const zb64 = await zip.generateAsync({ type: 'base64' });
   const filename = `${slug}.zip`;
-  const uri = `${FileSystem.cacheDirectory}${filename}`;
-  await FileSystem.writeAsStringAsync(uri, zb64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  const mimeType = 'application/zip';
+  const uri = await writeExportFile(filename, zb64, { encoding: 'base64', mimeType });
   return {
     uri,
     filename,
-    mimeType: 'application/zip',
+    mimeType,
     UTI: 'public.zip-archive',
     missing,
   };
-}
-
-// Save the artifact to the user's device storage.
-// - Android: requests a folder via StorageAccessFramework, copies bytes
-//   straight to the picked location. No share sheet involved.
-// - iOS: SAF doesn't exist; route through the system share sheet, which
-//   surfaces "Save to Files" as a top option. (User confirmed this UX path.)
-async function persistArtifactToDevice({ uri, filename, mimeType, UTI }) {
-  if (Platform.OS === 'android') {
-    const perms = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-    if (!perms.granted) {
-      throw new Error('Folder permission was denied');
-    }
-    const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-      perms.directoryUri,
-      filename,
-      mimeType
-    );
-    // Always base64-copy so binary formats (PDF) survive the round trip
-    // and text formats stay byte-identical.
-    const b64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    await FileSystem.writeAsStringAsync(fileUri, b64, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return fileUri;
-  }
-
-  await shareFile(uri, mimeType, 'Save article', UTI);
-  return uri;
 }
 
 // Markdown ships as a zip (assets bundled), so (like the Org bridge)
@@ -1581,38 +1537,53 @@ async function persistArtifactToDevice({ uri, filename, mimeType, UTI }) {
 // any skipped attachments. HTML/PDF stay single files and return a uri.
 export async function exportArticleMarkdown(threadId, options = {}) {
   const a = await buildThreadMarkdownZip(threadId, options);
-  await shareFile(a.uri, a.mimeType, 'Share thread as Markdown', a.UTI);
+  await shareExportFile(a.uri, {
+    filename: a.filename,
+    mimeType: a.mimeType,
+    dialogTitle: 'Share thread as Markdown',
+    UTI: a.UTI,
+  });
   return { uri: a.uri, filename: a.filename, missing: a.missing };
 }
 
 export async function exportArticleHtml(threadId) {
   const a = await buildArticleArtifact(threadId, 'html');
-  await shareFile(a.uri, a.mimeType, 'Share article as HTML', a.UTI);
+  await shareExportFile(a.uri, {
+    filename: a.filename,
+    mimeType: a.mimeType,
+    dialogTitle: 'Share article as HTML',
+    UTI: a.UTI,
+  });
   return a.uri;
 }
 
 export async function exportArticlePdf(threadId) {
   const a = await buildArticleArtifact(threadId, 'pdf');
-  await shareFile(a.uri, a.mimeType, 'Share article as PDF', a.UTI);
+  await shareExportFile(a.uri, {
+    filename: a.filename,
+    mimeType: a.mimeType,
+    dialogTitle: 'Share article as PDF',
+    UTI: a.UTI,
+  });
   return a.uri;
 }
 
 // One save-to-device entry point per format, symmetric with the share
 // variants above. Returns the saved location (a SAF content:// uri on
 // Android, the cached file uri on iOS after the user dismisses the share
-// sheet).
+// sheet, an object URL on web after the download).
 export async function saveArticleMarkdownToDevice(threadId, options = {}) {
   const a = await buildThreadMarkdownZip(threadId, options);
-  const savedUri = await persistArtifactToDevice(a);
+  const savedUri = await saveExportFileToDevice(a, 'Save article');
   return { uri: savedUri, filename: a.filename, missing: a.missing };
 }
 
 export async function saveArticleHtmlToDevice(threadId) {
   const a = await buildArticleArtifact(threadId, 'html');
-  return persistArtifactToDevice(a);
+  return saveExportFileToDevice(a, 'Save article');
 }
 
 export async function saveArticlePdfToDevice(threadId) {
   const a = await buildArticleArtifact(threadId, 'pdf');
-  return persistArtifactToDevice(a);
+  return saveExportFileToDevice(a, 'Save article');
 }

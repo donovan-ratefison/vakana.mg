@@ -14,10 +14,8 @@
 // truth, re-export is the edit. No options at export time: the deck
 // ships both cappuccino palettes and the person opening it toggles.
 
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { Platform } from 'react-native';
+import { writeExportFile, shareExportFile, saveExportFileToDevice } from './exportFile';
 import MarkdownIt from 'markdown-it';
 import JSZip from 'jszip';
 import { getArticleData, slugify } from './threadArticles';
@@ -589,14 +587,12 @@ async function buildThreadSlidesZip(threadId) {
 
   const zb64 = await zip.generateAsync({ type: 'base64' });
   const filename = `${slug}.zip`;
-  const uri = `${FileSystem.cacheDirectory}${filename}`;
-  await FileSystem.writeAsStringAsync(uri, zb64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  const mimeType = 'application/zip';
+  const uri = await writeExportFile(filename, zb64, { encoding: 'base64', mimeType });
   return {
     uri,
     filename,
-    mimeType: 'application/zip',
+    mimeType,
     UTI: 'public.zip-archive',
     missing,
   };
@@ -609,10 +605,8 @@ async function buildThreadSlidesZip(threadId) {
  */
 export async function exportThreadSlides(threadId) {
   const a = await buildThreadSlidesZip(threadId);
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('Sharing is not available on this device');
-  }
-  await Sharing.shareAsync(a.uri, {
+  await shareExportFile(a.uri, {
+    filename: a.filename,
     mimeType: a.mimeType,
     dialogTitle: 'Share thread as a slide deck',
     UTI: a.UTI,
@@ -622,36 +616,12 @@ export async function exportThreadSlides(threadId) {
 
 /**
  * Build and **save to device**. Android: SAF folder pick + byte copy.
- * iOS: share sheet ("Save to Files"). Mirrors
- * orgExport.saveThreadOrgToDevice. Still local, no transport.
+ * iOS: share sheet ("Save to Files"). Web: a download. See
+ * exportFile.saveExportFileToDevice. Still local, no transport.
  * @returns {Promise<{ uri, filename, missing:string[] }>}
  */
 export async function saveThreadSlidesToDevice(threadId) {
   const a = await buildThreadSlidesZip(threadId);
-  if (Platform.OS === 'android') {
-    const perms =
-      await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-    if (!perms.granted) throw new Error('Folder permission was denied');
-    const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-      perms.directoryUri,
-      a.filename,
-      a.mimeType
-    );
-    const b64 = await FileSystem.readAsStringAsync(a.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    await FileSystem.writeAsStringAsync(fileUri, b64, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return { uri: fileUri, filename: a.filename, missing: a.missing };
-  }
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('Sharing is not available on this device');
-  }
-  await Sharing.shareAsync(a.uri, {
-    mimeType: a.mimeType,
-    dialogTitle: 'Save thread slide deck',
-    UTI: a.UTI,
-  });
-  return { uri: a.uri, filename: a.filename, missing: a.missing };
+  const uri = await saveExportFileToDevice(a, 'Save thread slide deck');
+  return { uri, filename: a.filename, missing: a.missing };
 }
