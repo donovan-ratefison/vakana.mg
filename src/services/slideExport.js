@@ -19,6 +19,7 @@ import { writeExportFile, shareExportFile, saveExportFileToDevice } from './expo
 import MarkdownIt from 'markdown-it';
 import JSZip from 'jszip';
 import { getArticleData, slugify } from './threadArticles';
+import { withMediaUrl } from './mediaStore';
 import { renderBeadSvg, renderChainSvg } from '../beads/svg';
 import { MOOD_BY_KEY } from '../beads/types';
 import { isPrivate, MASKED_TITLE } from '../utils/privacy';
@@ -75,11 +76,13 @@ function formatCommentTime(createdAt) {
 // orgExport's photoBase64. A modest budget keeps the archive sane.
 async function prepPhotoRawBase64(uri, maxWidth = 1600, compress = 0.82) {
   try {
-    const r = await manipulateAsync(uri, [{ resize: { width: maxWidth } }], {
-      compress,
-      format: SaveFormat.JPEG,
-      base64: true,
-    });
+    const r = await withMediaUrl(uri, (u) =>
+      manipulateAsync(u, [{ resize: { width: maxWidth } }], {
+        compress,
+        format: SaveFormat.JPEG,
+        base64: true,
+      })
+    );
     return r?.base64 || null;
   } catch {
     return null;

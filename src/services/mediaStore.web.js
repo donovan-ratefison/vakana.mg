@@ -94,6 +94,41 @@ export async function openMediaFile(ref) {
   }
 }
 
+function missing() {
+  return new Error('Media file is missing');
+}
+
+// Call `fn` with a URL that the image manipulator can load (it sets
+// `img.src`, which cannot read an `opfs:` reference). A reference gets a
+// `blob:` URL that lives only for the call. Any other URI is refused
+// without a request: an export reads local files only.
+export async function withMediaUrl(uri, fn) {
+  if (uri?.startsWith('blob:') || uri?.startsWith('data:')) return fn(uri);
+  const file = uri?.startsWith(PREFIX) ? await openMediaFile(uri) : null;
+  if (!file) throw missing();
+  const url = URL.createObjectURL(file);
+  try {
+    return await fn(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+const BASE64_CHUNK = 32768;
+
+// The raw base64 content (no `data:` prefix) of a referenced file.
+export async function readMediaBase64(uri) {
+  const file = uri?.startsWith(PREFIX) ? await openMediaFile(uri) : null;
+  if (!file) throw missing();
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  // By chunks: one String.fromCharCode call on a big array overflows the stack.
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + BASE64_CHUNK));
+  }
+  return btoa(binary);
+}
+
 async function sweepKind(db, vaultId, kind) {
   const path = `attachments/${vaultId}/${KIND_DIRS[kind]}`;
   let dir;

@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Image,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BeadView from '../components/BeadView';
+import MediaImage from '../components/MediaImage';
 import { TEMPLATES, saveArticle, getArticleData } from '../services/threadArticles';
 import { useTheme } from '../theme';
 
@@ -388,7 +388,7 @@ export default function ThreadArticleComposerScreen({ navigation, route }) {
                 style={[styles.coverPhotoFrame, active && styles.coverPhotoFrameActive]}
                 activeOpacity={0.8}
               >
-                <Image source={{ uri: u }} style={styles.coverPhotoImg} />
+                <MediaImage uri={u} style={styles.coverPhotoImg} />
                 {active ? (
                   <View style={styles.coverPhotoCheck}>
                     <Ionicons name="checkmark" size={14} color={colors.primaryOnPrimary} />

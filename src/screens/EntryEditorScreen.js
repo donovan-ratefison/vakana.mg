@@ -5,7 +5,6 @@ import {
   Text,
   TextInput,
   ScrollView,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -26,6 +25,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import PhotoPicker from '../components/PhotoPicker';
 import VoiceRecorder from '../components/VoiceRecorder';
 import BeadView from '../components/BeadView';
+import MediaImage from '../components/MediaImage';
 import BeadComposer from '../components/BeadComposer';
 import AddToThreadOverlay from '../components/AddToThreadOverlay';
 import ThreadCard, { loadThreadPreview } from '../components/ThreadCard';
@@ -2490,8 +2490,8 @@ export default function EntryEditorScreen({ route, navigation }) {
                   onPress={() => handlePickMainPhoto(idx)}
                   activeOpacity={0.7}
                 >
-                  <Image
-                    source={{ uri }}
+                  <MediaImage
+                    uri={uri}
                     style={styles.cardPickerThumbImage}
                     resizeMode="cover"
                   />

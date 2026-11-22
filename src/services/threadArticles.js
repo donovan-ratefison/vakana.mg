@@ -9,7 +9,6 @@
 //   - PDF (HTML routed through expo-print)
 // Everything funnels through the share sheet via expo-sharing.
 
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import MarkdownIt from 'markdown-it';
@@ -19,6 +18,7 @@ import { chainSvgString } from '../beads/svgExport';
 import { PARENT_ENTRY, PARENT_THREAD } from './comments';
 import { formatTimeLabel } from '../utils/dateString';
 import { writeExportFile, shareExportFile, saveExportFileToDevice } from './exportFile';
+import { withMediaUrl, readMediaBase64 } from './mediaStore';
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
@@ -111,14 +111,16 @@ function basenameOf(uri) {
 // peaks at one prepped photo at a time.
 async function prepPhotoForExport(uri, maxWidth, compress = 0.85) {
   try {
-    const result = await manipulateAsync(
-      uri,
-      [{ resize: { width: maxWidth } }],
-      {
-        compress,
-        format: SaveFormat.JPEG,
-        base64: true,
-      }
+    const result = await withMediaUrl(uri, (u) =>
+      manipulateAsync(
+        u,
+        [{ resize: { width: maxWidth } }],
+        {
+          compress,
+          format: SaveFormat.JPEG,
+          base64: true,
+        }
+      )
     );
     if (!result?.base64) return null;
     return `data:image/jpeg;base64,${result.base64}`;
@@ -133,11 +135,13 @@ async function prepPhotoForExport(uri, maxWidth, compress = 0.85) {
 // the archive anyway). Mirrors orgExport.photoBase64.
 async function prepPhotoRawBase64(uri, maxWidth = 1600, compress = 0.82) {
   try {
-    const r = await manipulateAsync(uri, [{ resize: { width: maxWidth } }], {
-      compress,
-      format: SaveFormat.JPEG,
-      base64: true,
-    });
+    const r = await withMediaUrl(uri, (u) =>
+      manipulateAsync(u, [{ resize: { width: maxWidth } }], {
+        compress,
+        format: SaveFormat.JPEG,
+        base64: true,
+      })
+    );
     return r?.base64 || null;
   } catch {
     return null;
@@ -146,9 +150,7 @@ async function prepPhotoRawBase64(uri, maxWidth = 1600, compress = 0.82) {
 
 async function readFileRawBase64(uri) {
   try {
-    return await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    return await readMediaBase64(uri);
   } catch {
     return null;
   }

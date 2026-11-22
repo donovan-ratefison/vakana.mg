@@ -16,6 +16,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { getDb } from '../database/db';
 import { PARENT_ENTRY } from './comments';
 import { slugify } from './threadArticles';
+import { withMediaUrl } from './mediaStore';
 
 const OUTPUT_WIDTH = 1080;
 const OUTPUT_HEIGHT = 1350;
@@ -30,7 +31,7 @@ const OUTPUT_HEIGHT = 1350;
 const PREP_WIDTH = 1200;
 const PREP_QUALITY = 0.95;
 
-// Read the resized file as base64 and return a data URI. RN Image with
+// Ask the manipulator for base64 and return a data URI. RN Image with
 // a data URI renders synchronously through the static-image path; this
 // avoids react-native-view-shot's known Android-side compositing bug
 // where file:// URI images can come out with reduced contrast / a
@@ -38,15 +39,15 @@ const PREP_QUALITY = 0.95;
 // badly with PixelCopy.request).
 async function prepPhoto(uri) {
   try {
-    const r = await manipulateAsync(
-      uri,
-      [{ resize: { width: PREP_WIDTH } }],
-      { compress: PREP_QUALITY, format: SaveFormat.JPEG }
+    const r = await withMediaUrl(uri, (u) =>
+      manipulateAsync(
+        u,
+        [{ resize: { width: PREP_WIDTH } }],
+        { compress: PREP_QUALITY, format: SaveFormat.JPEG, base64: true }
+      )
     );
-    const b64 = await FileSystem.readAsStringAsync(r.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return `data:image/jpeg;base64,${b64}`;
+    if (!r?.base64) return uri;
+    return `data:image/jpeg;base64,${r.base64}`;
   } catch {
     // If prep fails (corrupted file, OOM, etc.), fall back to the
     // original URI so the export doesn't die. RN Image will do its

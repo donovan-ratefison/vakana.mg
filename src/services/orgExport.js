@@ -4,9 +4,9 @@
 
 import { writeExportFile, shareExportFile, saveExportFileToDevice } from './exportFile';
 import JSZip from 'jszip';
-import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { getDb } from '../database/db';
+import { withMediaUrl, readMediaBase64 } from './mediaStore';
 import { placeholderBeadForDate } from './autoThread';
 import {
   SHAPE_GEOMETRY,
@@ -794,11 +794,13 @@ export function emitEntryOrgDocument(data, options = {}) {
 // has no Android-Print 2 MB ceiling, but big images bloat it anyway).
 async function photoBase64(uri, maxWidth = 1600, quality = 0.82) {
   try {
-    const r = await manipulateAsync(uri, [{ resize: { width: maxWidth } }], {
-      compress: quality,
-      format: SaveFormat.JPEG,
-      base64: true,
-    });
+    const r = await withMediaUrl(uri, (u) =>
+      manipulateAsync(u, [{ resize: { width: maxWidth } }], {
+        compress: quality,
+        format: SaveFormat.JPEG,
+        base64: true,
+      })
+    );
     return r?.base64 || null;
   } catch {
     return null;
@@ -807,9 +809,7 @@ async function photoBase64(uri, maxWidth = 1600, quality = 0.82) {
 
 async function fileBase64(uri) {
   try {
-    return await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    return await readMediaBase64(uri);
   } catch {
     return null;
   }

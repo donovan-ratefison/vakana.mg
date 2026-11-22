@@ -1,4 +1,10 @@
-import { mediaExtension, openMediaFile, rescueAndSweepMedia } from '../mediaStore.web';
+import {
+  mediaExtension,
+  openMediaFile,
+  readMediaBase64,
+  rescueAndSweepMedia,
+  withMediaUrl,
+} from '../mediaStore.web';
 import { getDb } from '../../database/db';
 
 jest.mock('../../database/db', () => ({ getDb: jest.fn() }));
@@ -103,5 +109,94 @@ describe('mediaExtension', () => {
   it('gives no extension for an unknown or empty type', () => {
     expect(mediaExtension('application/octet-stream')).toBe('');
     expect(mediaExtension('')).toBe('');
+  });
+});
+
+// A real File in the fake OPFS: the value of a file in `tree` is returned as is.
+function useFiles(files) {
+  const tree = new Map([[PHOTOS, new Map(Object.entries(files))]]);
+  const dir = (path) => ({
+    ...fakeDir(tree, path),
+    async getDirectoryHandle(name) {
+      await fakeDir(tree, path).getDirectoryHandle(name);
+      return dir(path ? `${path}/${name}` : name);
+    },
+    async getFileHandle(name) {
+      const file = tree.get(path)?.get(name);
+      if (!file) throw new Error('NotFoundError');
+      return { getFile: async () => file };
+    },
+  });
+  Object.defineProperty(global, 'navigator', {
+    value: { storage: { getDirectory: async () => dir('') } },
+    configurable: true,
+  });
+}
+
+const REF = `opfs:${PHOTOS}/p.jpg`;
+
+describe('withMediaUrl on web', () => {
+  let create;
+  let revoke;
+  beforeEach(() => {
+    useFiles({ 'p.jpg': new File([new Uint8Array([0, 1, 2, 255])], 'p.jpg') });
+    create = jest.fn(() => 'blob:made');
+    revoke = jest.fn();
+    URL.createObjectURL = create;
+    URL.revokeObjectURL = revoke;
+  });
+
+  it('gives a blob URL of the file to fn and revokes it after', async () => {
+    const fn = jest.fn(async (u) => `done ${u}`);
+    expect(await withMediaUrl(REF, fn)).toBe('done blob:made');
+    expect(fn).toHaveBeenCalledWith('blob:made');
+    expect(create.mock.calls[0][0]).toBeInstanceOf(File);
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith('blob:made');
+  });
+
+  it('revokes the URL when fn rejects', async () => {
+    await expect(withMediaUrl(REF, async () => { throw new Error('boom'); }))
+      .rejects.toThrow('boom');
+    expect(revoke).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    `opfs:${PHOTOS}/absent.jpg`,
+    'https://example.invalid/p.jpg',
+    'opfs:journal.db',
+  ])('refuses %s without a call to fn', async (uri) => {
+    const fn = jest.fn();
+    await expect(withMediaUrl(uri, fn)).rejects.toThrow('Media file is missing');
+    expect(fn).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('passes a blob: URL as is', async () => {
+    const fn = jest.fn(async () => 'ok');
+    expect(await withMediaUrl('blob:abc', fn)).toBe('ok');
+    expect(fn).toHaveBeenCalledWith('blob:abc');
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('readMediaBase64 on web', () => {
+  it('encodes the file in raw base64', async () => {
+    useFiles({ 'p.jpg': new File([new Uint8Array([0, 1, 2, 255])], 'p.jpg') });
+    expect(await readMediaBase64(REF)).toBe('AAEC/w==');
+  });
+
+  it('encodes a file bigger than one chunk without a loss', async () => {
+    const bytes = new Uint8Array(70000).map((_, i) => (i * 7) % 256);
+    useFiles({ 'p.jpg': new File([bytes], 'p.jpg') });
+    const decoded = atob(await readMediaBase64(REF));
+    expect(decoded.length).toBe(bytes.length);
+    expect(Uint8Array.from(decoded, (c) => c.charCodeAt(0))).toEqual(bytes);
+  });
+
+  it('refuses a URI that is not a reference', async () => {
+    await expect(readMediaBase64('https://example.invalid/v.webm')).rejects.toThrow(
+      'Media file is missing'
+    );
   });
 });

@@ -170,3 +170,16 @@ export async function rescueAndSweepMedia() {
     console.warn('rescueAndSweepMedia aborted:', e?.message || e);
   }
 }
+
+// Call `fn` with a URI that expo-image-manipulator can load. On Android the
+// file URI loads as is.
+export async function withMediaUrl(uri, fn) {
+  return fn(uri);
+}
+
+// The raw base64 content of a media file, for an export.
+export async function readMediaBase64(uri) {
+  return FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+}
