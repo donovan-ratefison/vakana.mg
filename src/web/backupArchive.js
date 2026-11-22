@@ -193,6 +193,24 @@ export async function restoreArchive({ zipUri, names, modes, onProgress }) {
     for (const [id, uri] of voiceIdToUri) {
       await memDb.runAsync('UPDATE entry_voice_notes SET uri = ? WHERE id = ?', [uri, id]);
     }
+    // An archive URI that is not rewritten must never load an outside address.
+    for (const [table, sql] of [
+      ['entry_photos', "DELETE FROM entry_photos WHERE substr(uri, 1, 17) <> 'opfs:attachments/'"],
+      [
+        'entry_voice_notes',
+        "DELETE FROM entry_voice_notes WHERE substr(uri, 1, 17) <> 'opfs:attachments/'",
+      ],
+      [
+        'thread_articles',
+        "UPDATE thread_articles SET cover_photo_uri = NULL WHERE substr(cover_photo_uri, 1, 17) <> 'opfs:attachments/'",
+      ],
+    ]) {
+      const found = await memDb.getFirstAsync(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        [table]
+      );
+      if (found) await memDb.runAsync(sql);
+    }
 
     onProgress?.({ stage: 'closing-db' });
     await backupDatabaseAsync({ sourceDatabase: memDb, destDatabase: db });

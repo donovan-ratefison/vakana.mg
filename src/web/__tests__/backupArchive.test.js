@@ -99,6 +99,12 @@ describe('restoreArchive', () => {
       ...Array.from('SQLite format 3\0', (c) => c.charCodeAt(0)),
       ...[16, 0, version, version, 0, 0],
     ]);
+  const DROP_PHOTOS =
+    "DELETE FROM entry_photos WHERE substr(uri, 1, 17) <> 'opfs:attachments/'";
+  const DROP_VOICE =
+    "DELETE FROM entry_voice_notes WHERE substr(uri, 1, 17) <> 'opfs:attachments/'";
+  const CLEAR_COVERS =
+    "UPDATE thread_articles SET cover_photo_uri = NULL WHERE substr(cover_photo_uri, 1, 17) <> 'opfs:attachments/'";
   const manifestOf = (extra) => JSON.stringify({ version: 2, mode: 'full', ...extra });
 
   let memDb;
@@ -135,7 +141,7 @@ describe('restoreArchive', () => {
       received = Array.from(bytes);
       return memDb;
     });
-    writeMediaBlob.mockImplementation(async (blob, kind, ext) => `opfs:new/${kind}${ext}`);
+    writeMediaBlob.mockImplementation(async (blob, kind, ext) => `opfs:attachments/new/${kind}${ext}`);
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -244,7 +250,10 @@ describe('restoreArchive', () => {
     expect(blob.size).toBe(PHOTO_BYTES.length);
     expect([kind, ext]).toEqual(['photo', '.jpg']);
     expect(memDb.runAsync.mock.calls).toEqual([
-      ['UPDATE entry_photos SET uri = ? WHERE id = ?', ['opfs:new/photo.jpg', 7]],
+      ['UPDATE entry_photos SET uri = ? WHERE id = ?', ['opfs:attachments/new/photo.jpg', 7]],
+      [DROP_PHOTOS],
+      [DROP_VOICE],
+      [CLEAR_COVERS],
     ]);
     expect(backupDatabaseAsync).toHaveBeenCalledWith({
       sourceDatabase: memDb,
@@ -253,7 +262,7 @@ describe('restoreArchive', () => {
     expect(memDb.closeAsync).toHaveBeenCalledTimes(1);
     expect(closeDatabase).toHaveBeenCalledTimes(1);
     expect(result.mode).toBe('full');
-    expect([...result.photoIdToUri]).toEqual([[7, 'opfs:new/photo.jpg']]);
+    expect([...result.photoIdToUri]).toEqual([[7, 'opfs:attachments/new/photo.jpg']]);
     expect(result.voiceIdToUri.size).toBe(0);
     expect(result.manifest.skipped).toHaveLength(1);
   });
@@ -270,6 +279,32 @@ describe('restoreArchive', () => {
         'attachments/photos/7.jpg': PHOTO_BYTES,
       })
     ).rejects.toThrow('QuotaExceededError');
+    expect(backupDatabaseAsync).not.toHaveBeenCalled();
+    expect(closeDatabase).not.toHaveBeenCalled();
+    expect(memDb.closeAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the cover query when the archive has no thread_articles table', async () => {
+    memDb.getFirstAsync.mockImplementation(async (sql, params) => {
+      if (sql.includes('integrity_check')) return { integrity_check: 'ok' };
+      return params?.[0] === 'thread_articles' ? null : { name: 'entries' };
+    });
+
+    await restore({ 'manifest.json': manifestOf(), 'journal.db': sqliteBytes() });
+
+    expect(memDb.runAsync.mock.calls).toEqual([[DROP_PHOTOS], [DROP_VOICE]]);
+    expect(backupDatabaseAsync).toHaveBeenCalledTimes(1);
+    expect(closeDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the database open and not replaced when the media cleanup fails', async () => {
+    memDb.runAsync.mockImplementation(async (sql) => {
+      if (sql === DROP_PHOTOS) throw new Error('disk I/O error');
+    });
+
+    await expect(
+      restore({ 'manifest.json': manifestOf(), 'journal.db': sqliteBytes() })
+    ).rejects.toThrow('disk I/O error');
     expect(backupDatabaseAsync).not.toHaveBeenCalled();
     expect(closeDatabase).not.toHaveBeenCalled();
     expect(memDb.closeAsync).toHaveBeenCalledTimes(1);

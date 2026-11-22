@@ -4,8 +4,15 @@ import { openMediaFile } from '../services/mediaStore.web';
 // The URL a player or an image can load for a stored media URI. An `opfs:`
 // reference is read from the media store and served through an object URL,
 // which is revoked on unmount and when `uri` changes. The result is null
-// until the URL is ready, and stays null if the file is missing. Any other
-// URI is returned as is.
+// until the URL is ready, and stays null if the file is missing. A `blob:` or
+// `data:` URI (a new photo or recording) is returned as is. Any other URI
+// gives null, so that no request leaves the browser.
+export function directMediaUrl(uri) {
+  return typeof uri === 'string' && (uri.startsWith('blob:') || uri.startsWith('data:'))
+    ? uri
+    : null;
+}
+
 export default function useMediaUrl(uri) {
   const stored = !!uri && uri.startsWith('opfs:');
   // The URL is kept with its reference: after a change of `uri`, the URL of
@@ -30,6 +37,6 @@ export default function useMediaUrl(uri) {
     };
   }, [uri, stored]);
 
-  if (!stored) return uri;
+  if (!stored) return directMediaUrl(uri);
   return made && made.uri === uri ? made.url : null;
 }
