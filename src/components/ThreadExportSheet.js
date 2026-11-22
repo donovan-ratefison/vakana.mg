@@ -63,6 +63,10 @@ const FORMAT_META = {
   },
 };
 
+// expo-print cannot make a PDF file in the browser.
+const PDF_OFF = Platform.OS === 'web';
+const PDF_OFF_REASON = 'Not available in the browser. Export HTML, then print it from the browser.';
+
 export default function ThreadExportSheet({
   visible,
   threadId,
@@ -89,7 +93,7 @@ export default function ThreadExportSheet({
   // detail panel when the caller resumes the flow (return from "Customize
   // layout"). Never a stale panel from the previous open.
   useEffect(() => {
-    if (visible) setExportFormat(initialFormat ?? null);
+    if (visible) setExportFormat(PDF_OFF && initialFormat === 'pdf' ? null : initialFormat ?? null);
   }, [visible, initialFormat]);
 
   const exportOrg = async (mode) => {
@@ -254,8 +258,10 @@ export default function ThreadExportSheet({
                   colors={colors}
                   icon="document-outline"
                   label="PDF"
-                  hint="Ready to print and to share"
+                  hint={PDF_OFF ? PDF_OFF_REASON : 'Ready to print and to share'}
                   onPress={() => setExportFormat('pdf')}
+                  disabled={PDF_OFF}
+                  accessibilityLabel={PDF_OFF ? `PDF. ${PDF_OFF_REASON}` : undefined}
                 />
                 <SheetRow
                   styles={styles}
@@ -434,19 +440,22 @@ export default function ThreadExportSheet({
   );
 }
 
-function SheetRow({ styles, colors, icon, label, hint, onPress, last }) {
+function SheetRow({ styles, colors, icon, label, hint, onPress, last, disabled, accessibilityLabel }) {
   return (
     <TouchableOpacity
       style={[styles.sheetRow, last && styles.sheetRowLast]}
       onPress={onPress}
       activeOpacity={0.7}
+      disabled={disabled}
+      accessibilityState={disabled ? { disabled: true } : undefined}
+      accessibilityLabel={accessibilityLabel}
     >
-      <Ionicons name={icon} size={20} color={colors.primary} />
+      <Ionicons name={icon} size={20} color={disabled ? colors.textFaint : colors.primary} />
       <View style={styles.sheetRowText}>
-        <Text style={styles.sheetRowLabel}>{label}</Text>
+        <Text style={[styles.sheetRowLabel, disabled && styles.sheetRowLabelDisabled]}>{label}</Text>
         <Text style={styles.sheetRowHint}>{hint}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+      {disabled ? null : <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />}
     </TouchableOpacity>
   );
 }
@@ -532,6 +541,9 @@ const makeStyles = (colors) =>
       color: colors.text,
       fontSize: 15,
       fontWeight: '700',
+    },
+    sheetRowLabelDisabled: {
+      color: colors.textFaint,
     },
     sheetRowHint: {
       color: colors.textMuted,

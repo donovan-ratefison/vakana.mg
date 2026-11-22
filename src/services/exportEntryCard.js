@@ -11,12 +11,14 @@
 
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { getDb } from '../database/db';
 import { PARENT_ENTRY } from './comments';
 import { slugify } from './threadArticles';
 import { withMediaUrl } from './mediaStore';
+import { shareExportFile } from './exportFile';
 
 const OUTPUT_WIDTH = 1080;
 const OUTPUT_HEIGHT = 1350;
@@ -114,6 +116,21 @@ export async function loadEntryCardData(entryId) {
 export async function captureAndShareCard(viewRef, entry, withNotes) {
   if (!viewRef?.current) throw new Error('Card view is not mounted');
 
+  const slug = slugify(entry?.title) || `entry-${entry?.id ?? 'card'}`;
+  const date = entry?.date || 'undated';
+  const suffix = withNotes ? 'card-notes' : 'card';
+  const filename = `${slug}-${date}-${suffix}.png`;
+  const dialogTitle = withNotes ? 'Share card with notes' : 'Share card';
+
+  if (Platform.OS === 'web') {
+    const url = await require('../web/cardCapture').captureCardUrl(viewRef.current, {
+      width: OUTPUT_WIDTH,
+      height: OUTPUT_HEIGHT,
+    });
+    await shareExportFile(url, { filename, mimeType: 'image/png', dialogTitle, UTI: 'public.png' });
+    return url;
+  }
+
   const uri = await captureRef(viewRef, {
     format: 'png',
     quality: 1,
@@ -124,10 +141,6 @@ export async function captureAndShareCard(viewRef, entry, withNotes) {
 
   // Move the file into our cache with a friendly name so the share-sheet
   // suggestion picks up something nicer than "<random>.png".
-  const slug = slugify(entry?.title) || `entry-${entry?.id ?? 'card'}`;
-  const date = entry?.date || 'undated';
-  const suffix = withNotes ? 'card-notes' : 'card';
-  const filename = `${slug}-${date}-${suffix}.png`;
   const targetUri = `${FileSystem.cacheDirectory}${filename}`;
   await FileSystem.copyAsync({ from: uri, to: targetUri });
 
@@ -136,7 +149,7 @@ export async function captureAndShareCard(viewRef, entry, withNotes) {
 
   await Sharing.shareAsync(targetUri, {
     mimeType: 'image/png',
-    dialogTitle: withNotes ? 'Share card with notes' : 'Share card',
+    dialogTitle,
     UTI: 'public.png',
   });
 
